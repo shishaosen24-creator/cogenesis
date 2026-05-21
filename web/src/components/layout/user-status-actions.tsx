@@ -10,47 +10,44 @@ import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { GitHubLink } from "@/components/layout/github-link";
 import { VersionReleaseModal } from "@/components/layout/version-release-modal";
 import { cn } from "@/lib/utils";
+import { canvasThemes } from "@/lib/canvas-theme";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 type UserStatusActionsProps = {
   showConfig?: boolean;
+  variant?: "default" | "canvas";
   onOpenShortcuts?: () => void;
   accountOpen?: boolean;
   onAccountOpenChange?: (open: boolean) => void;
   accountRef?: RefObject<HTMLDivElement | null>;
   getPopupContainer?: (node: HTMLElement) => HTMLElement;
-  avatarClassName?: string;
-  avatarStyle?: CSSProperties;
-  gitHubClassName?: string;
-  gitHubStyle?: CSSProperties;
-  versionStyle?: CSSProperties;
-  iconStyle?: CSSProperties;
 };
 
 export function UserStatusActions({
   showConfig = true,
+  variant = "default",
   onOpenShortcuts,
   accountOpen,
   onAccountOpenChange,
   accountRef,
   getPopupContainer,
-  avatarClassName,
-  avatarStyle,
-  gitHubClassName,
-  gitHubStyle,
-  versionStyle,
-  iconStyle,
 }: UserStatusActionsProps) {
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const user = useUserStore((state) => state.user);
   const logout = useUserStore((state) => state.clearSession);
   const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+  const canvasTheme = canvasThemes[theme];
   const userName = user?.username || "用户";
   const avatarText = (userName.trim()[0] || "U").toUpperCase();
   const naturalIconClass = "inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 dark:text-stone-300 dark:hover:text-white [&_svg]:size-4";
+  const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
+  const versionStyle = iconStyle;
+  const gitHubClassName = variant === "canvas" ? "size-11 text-base" : undefined;
+  const gitHubStyle = iconStyle;
+  const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text } : undefined;
   const menuItems: ItemType[] = [
     { key: "user", disabled: true, label: <span className="font-medium text-current">{userName}</span> },
     ...(user?.role === "admin" ? [{ key: "admin", icon: <Shield className="size-4" />, label: <Link href="/admin">管理后台</Link> }] : []),
@@ -95,7 +92,7 @@ export function UserStatusActions({
         >
           <button
             type="button"
-            className={cn("inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-transparent p-0 text-xs font-semibold leading-none text-stone-800 transition hover:border-stone-500 hover:text-stone-950 dark:border-stone-700 dark:text-stone-100 dark:hover:border-stone-400 dark:hover:text-white", avatarClassName)}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-transparent p-0 text-xs font-semibold leading-none text-stone-800 transition hover:border-stone-500 hover:text-stone-950 dark:border-stone-700 dark:text-stone-100 dark:hover:border-stone-400 dark:hover:text-white"
             style={avatarStyle}
             aria-label="账户菜单"
           >

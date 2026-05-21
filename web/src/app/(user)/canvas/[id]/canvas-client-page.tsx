@@ -2160,16 +2160,12 @@ function CanvasTopBar({
 
       <div className="pointer-events-auto flex items-center gap-1.5">
         <UserStatusActions
+          variant="canvas"
           accountOpen={accountOpen}
           onAccountOpenChange={setAccountOpen}
           accountRef={accountRef}
           getPopupContainer={(node) => node.parentElement || document.body}
           onOpenShortcuts={() => { setShortcutsOpen(true); setAccountOpen(false); }}
-          iconStyle={{ color: theme.node.text }}
-          gitHubClassName="size-11 text-base"
-          gitHubStyle={{ color: theme.node.text }}
-          versionStyle={{ color: theme.node.text }}
-          avatarStyle={{ borderColor: theme.toolbar.border, color: theme.node.text }}
         />
         {assistantCollapsed ? (
           <>

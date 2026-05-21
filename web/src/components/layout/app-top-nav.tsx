@@ -3,6 +3,7 @@
 import { Menu, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { App, Button, Drawer, Form, Input, Modal, Segmented } from "antd";
+import { usePathname } from "next/navigation";
 
 import { ModelPicker } from "@/components/model-picker";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
@@ -17,17 +18,13 @@ import { useUserStore } from "@/stores/use-user-store";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
-type AppTopNavProps = {
-  activeToolSlug?: NavigationToolSlug;
-  config: AiConfig;
-  onConfigChange: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
-  hideHeader?: boolean;
-};
-
-export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader = false }: AppTopNavProps) {
+export function AppTopNav() {
   const { message } = App.useApp();
+  const pathname = usePathname();
   const [loadingModels, setLoadingModels] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const config = useConfigStore((state) => state.config);
+  const updateConfig = useConfigStore((state) => state.updateConfig);
   const isConfigOpen = useConfigStore((state) => state.isConfigOpen);
   const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
   const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -39,6 +36,9 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
   const isReady = useUserStore((state) => state.isReady);
   const publicSettings = useConfigStore((state) => state.publicSettings);
   const effectiveConfig = useEffectiveConfig();
+  const hideHeader = /^\/canvas\/[^/]+/.test(pathname);
+  const slug = pathname.split("/").filter(Boolean)[0];
+  const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
   const modelChannel = publicSettings?.modelChannel;
   const allowCustomChannel = modelChannel?.allowCustomChannel === true;
   const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
@@ -48,7 +48,7 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
     setConfigDialogOpen(false);
     if (effectiveMode === "local" && (!config.baseUrl.trim() || !config.apiKey.trim())) return;
     if (!modelConfig.imageModel.trim() || !modelConfig.textModel.trim()) return;
-    if (!allowCustomChannel && config.channelMode !== "remote") onConfigChange("channelMode", "remote");
+    if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
     if (shouldPromptContinue) {
       message.success("配置已保存，请继续刚才的请求");
     } else {
@@ -65,9 +65,9 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
     setLoadingModels(true);
     try {
       const models = await fetchImageModels(config);
-      onConfigChange("models", models);
-      if (models.length && !models.includes(config.imageModel)) onConfigChange("imageModel", models[0]);
-      if (models.length && !models.includes(config.textModel)) onConfigChange("textModel", models[0]);
+      updateConfig("models", models);
+      if (models.length && !models.includes(config.imageModel)) updateConfig("imageModel", models[0]);
+      if (models.length && !models.includes(config.textModel)) updateConfig("textModel", models[0]);
       message.success("模型列表已更新");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "读取模型失败");
@@ -209,7 +209,7 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
                 <Segmented
                   block
                   value={effectiveMode}
-                  onChange={(value) => onConfigChange("channelMode", value as AiConfig["channelMode"])}
+                  onChange={(value) => updateConfig("channelMode", value as AiConfig["channelMode"])}
                   options={[{ label: "云端渠道", value: "remote" }, { label: "本地直连", value: "local" }]}
                 />
               </Form.Item>
@@ -218,10 +218,10 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
               <>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Form.Item label="Base URL" className="mb-4">
-                    <Input value={config.baseUrl} onChange={(event) => onConfigChange("baseUrl", event.target.value)} />
+                    <Input value={config.baseUrl} onChange={(event) => updateConfig("baseUrl", event.target.value)} />
                   </Form.Item>
                   <Form.Item label="API Key" className="mb-4">
-                    <Input.Password value={config.apiKey} onChange={(event) => onConfigChange("apiKey", event.target.value)} />
+                    <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
                   </Form.Item>
                 </div>
                 <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2 dark:border-stone-800">
@@ -240,15 +240,15 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
             )}
             <div className="grid gap-4 md:grid-cols-2">
               <Form.Item label="默认生图模型" className="mb-4">
-                <ModelPicker config={modelConfig} value={modelConfig.imageModel} onChange={(model) => onConfigChange("imageModel", model)} fullWidth />
+                <ModelPicker config={modelConfig} value={modelConfig.imageModel} onChange={(model) => updateConfig("imageModel", model)} fullWidth />
               </Form.Item>
               <Form.Item label="默认文本模型" className="mb-4">
-                <ModelPicker config={modelConfig} value={modelConfig.textModel} onChange={(model) => onConfigChange("textModel", model)} fullWidth />
+                <ModelPicker config={modelConfig} value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />
               </Form.Item>
             </div>
             {effectiveMode === "local" ? (
               <Form.Item label="系统提示词" className="mb-0">
-                <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => onConfigChange("systemPrompt", event.target.value)} />
+                <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
               </Form.Item>
             ) : null}
           </Form>
