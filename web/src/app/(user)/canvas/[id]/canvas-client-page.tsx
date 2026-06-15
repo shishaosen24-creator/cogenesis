@@ -44,8 +44,10 @@ import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "../components/asset-picker-modal";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
+import { useCanvasAgentStore } from "../stores/use-canvas-agent-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
 import { applyCanvasAgentOps, type CanvasAgentAssetPackItem, type CanvasAgentOp, type CanvasAgentSnapshot, type CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
+import { buildDirectorAgentHandoffPrompt } from "../director/agent-handoff";
 import { createDirectorReferencePackItemFromNode } from "../director/reference-pack";
 import { materializeDirectorWorkflow } from "../director/workflow-materializer";
 import type { DirectorReferencePackItem, DirectorReferenceRole, DirectorWorkflow, DirectorWorkflowMaterialization, DirectorWorkflowRunReport } from "../director/types";
@@ -301,6 +303,7 @@ function InfiniteCanvasPage() {
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
+    const setAgentState = useCanvasAgentStore((state) => state.setAgentState);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
@@ -2339,6 +2342,24 @@ function InfiniteCanvasPage() {
         [effectiveConfig, handleGenerateNode, isAiConfigReady, message, openConfigDialog],
     );
 
+    const handleDirectorAgentHandoff = useCallback(
+        (workflow: DirectorWorkflow, materialization: DirectorWorkflowMaterialization) => {
+            const snapshot = createAgentSnapshot();
+            const prompt = buildDirectorAgentHandoffPrompt({
+                workflow,
+                materialization,
+                assetPack: snapshot.assetPack,
+                taskQueue: snapshot.taskQueue,
+            });
+            setAgentState({ prompt, activeTab: "chat" });
+            setAssistantMounted(true);
+            setAssistantCollapsed(false);
+            setAssistantPanelMode("local-agent");
+            message.success("已交给本地 Agent 输入框，确认后可发送执行");
+        },
+        [createAgentSnapshot, message, setAgentState],
+    );
+
     const applyAgentOps = useCallback(
         async (ops: CanvasAgentOp[]) => {
             const safeOps = Array.isArray(ops) ? ops : [];
@@ -2933,6 +2954,7 @@ function InfiniteCanvasPage() {
                     onInsertText={insertAssistantText}
                     onApplyDirectorWorkflow={handleApplyDirectorWorkflow}
                     onExecuteDirectorWorkflow={handleExecuteDirectorWorkflow}
+                    onHandoffDirectorWorkflowToAgent={handleDirectorAgentHandoff}
                     onPasteImage={pasteAssistantImage}
                     onAttachReferenceFile={attachAssistantReferenceFile}
                     sharedReferencePack={sharedReferencePack}

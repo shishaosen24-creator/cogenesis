@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Film, History, ImageIcon, LoaderCircle, MessageSquare, Mic2, PanelRightClose, Paperclip, Play, Plus, RotateCcw, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
+import { ArrowUp, Bot, Film, History, ImageIcon, LoaderCircle, MessageSquare, Mic2, PanelRightClose, Paperclip, Play, Plus, RotateCcw, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
 import { Button, Modal, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
@@ -44,6 +44,7 @@ type CanvasAssistantPanelProps = {
     onInsertText: (text: string) => void;
     onApplyDirectorWorkflow: (workflow: DirectorWorkflow) => Promise<DirectorWorkflowMaterialization>;
     onExecuteDirectorWorkflow: (materialization: DirectorWorkflowMaterialization) => Promise<DirectorWorkflowRunReport>;
+    onHandoffDirectorWorkflowToAgent: (workflow: DirectorWorkflow, materialization: DirectorWorkflowMaterialization) => void;
     onPasteImage: (file: File) => void;
     onAttachReferenceFile: (file: File, role: DirectorReferenceRole) => Promise<DirectorReferencePackItem | null>;
     sharedReferencePack: DirectorReferencePackItem[];
@@ -57,7 +58,7 @@ type CanvasAssistantPanelProps = {
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onPasteImage, onAttachReferenceFile, sharedReferencePack, onSharedReferencePackChange, sharedAssetPack, sharedTaskQueue, panelMode, onPanelModeChange, hidden = false, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onHandoffDirectorWorkflowToAgent, onPasteImage, onAttachReferenceFile, sharedReferencePack, onSharedReferencePackChange, sharedAssetPack, sharedTaskQueue, panelMode, onPanelModeChange, hidden = false, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -305,6 +306,19 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         }
     };
 
+    const handoffDirectorMessageToAgent = async (message: CanvasAssistantMessage) => {
+        if (!message.directorWorkflow) return;
+        const sessionId = activeSession?.id;
+        if (!sessionId) return;
+        try {
+            const materialization = message.directorMaterialization || (await onApplyDirectorWorkflow(message.directorWorkflow));
+            updateMessage(sessionId, message.id, { directorMaterialization: materialization });
+            onHandoffDirectorWorkflowToAgent(message.directorWorkflow, materialization);
+        } catch (error) {
+            updateMessage(sessionId, message.id, { text: error instanceof Error ? error.message : "交给本地 Agent 失败", isExecuting: false });
+        }
+    };
+
     const startResize = () => {
         const move = (event: MouseEvent) => setWidth(Math.min(760, Math.max(320, window.innerWidth - event.clientX)));
         const stop = () => {
@@ -411,7 +425,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                             onDelete={(id) => setDeleteChatIds([id])}
                         />
                     ) : messages.length ? (
-                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onExecuteDirectorWorkflow={executeDirectorMessage} />
+                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onExecuteDirectorWorkflow={executeDirectorMessage} onHandoffDirectorWorkflowToAgent={handoffDirectorMessageToAgent} />
                     ) : (
                         <div className="flex h-full flex-col items-center justify-center px-1 text-center">
                             <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
@@ -733,12 +747,14 @@ function AssistantMessages({
     onInsertImage,
     onInsertText,
     onExecuteDirectorWorkflow,
+    onHandoffDirectorWorkflowToAgent,
 }: {
     messages: CanvasAssistantMessage[];
     onRetry: (message: CanvasAssistantMessage) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
     onExecuteDirectorWorkflow: (message: CanvasAssistantMessage) => void;
+    onHandoffDirectorWorkflowToAgent: (message: CanvasAssistantMessage) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -765,9 +781,14 @@ function AssistantMessages({
                             <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<RotateCcw className="size-3.5" />} onClick={() => onRetry(message)} title="重试" />
                             {!message.images?.length ? <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<Plus className="size-3.5" />} onClick={() => onInsertText(message.text)} title="插入画布" /> : null}
                             {message.directorWorkflow ? (
-                                <Button size="small" className="!rounded-full" style={{ borderColor: theme.node.activeStroke, color: theme.node.text }} icon={message.isExecuting ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} disabled={message.isExecuting} onClick={() => onExecuteDirectorWorkflow(message)}>
-                                    {message.isExecuting ? "执行中" : "执行工作流"}
-                                </Button>
+                                <>
+                                    <Button size="small" className="!rounded-full" style={{ borderColor: theme.node.activeStroke, color: theme.node.text }} icon={<Bot className="size-3.5" />} disabled={message.isExecuting} onClick={() => onHandoffDirectorWorkflowToAgent(message)}>
+                                        交给 Agent
+                                    </Button>
+                                    <Button size="small" className="!rounded-full" style={{ borderColor: theme.node.activeStroke, color: theme.node.text }} icon={message.isExecuting ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} disabled={message.isExecuting} onClick={() => onExecuteDirectorWorkflow(message)}>
+                                        {message.isExecuting ? "执行中" : "执行工作流"}
+                                    </Button>
+                                </>
                             ) : null}
                         </div>
                     ) : null}
