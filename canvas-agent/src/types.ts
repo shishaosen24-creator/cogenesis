@@ -1,0 +1,10 @@
+export type Position = { x: number; y: number };
+export type Viewport = { x: number; y: number; k: number };
+export type CanvasNodeType = "image" | "text" | "config" | "video" | "audio";
+export type CanvasNode = { id: string; type: CanvasNodeType; title?: string; position: Position; width: number; height: number; metadata?: Record<string, unknown> };
+export type CanvasConnection = { id: string; fromNodeId: string; toNodeId: string };
+export type CanvasAssetPackItem = { id: string; title: string; source?: string; mediaType?: string; nodeId?: string; assetId?: string; role?: string; summary?: string; tags?: string[]; storageKey?: string; mimeType?: string; width?: number; height?: number; durationMs?: number };
+export type CanvasTaskQueueItem = { id: string; nodeId: string; workflowId: string; stepId?: string; title: string; role?: string; mode?: "text" | "image" | "video" | "audio"; prompt?: string; dependencyStepIds?: string[]; plannedOrder?: number; runState?: "planned" | "ready" | "running" | "done" | "error"; connectedFrom?: string[]; connectedTo?: string[] };
+export type CanvasSnapshot = { projectId?: string; title?: string; nodes?: CanvasNode[]; connections?: CanvasConnection[]; selectedNodeIds?: string[]; viewport?: Viewport; assetPack?: CanvasAssetPackItem[]; taskQueue?: CanvasTaskQueueItem[]; clientId?: string };
+export type AgentEmit = (type: string, payload: unknown) => void;
+export type AgentAttachment = { name?: string; type?: string; dataUrl?: string };

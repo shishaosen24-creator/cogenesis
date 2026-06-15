@@ -25,8 +25,10 @@ import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantMessage,
 import { DIRECTOR_REFERENCE_ROLE_OPTIONS, createDirectorReferencePackItemFromNode, directorReferencePackToLegacyReferences } from "../director/reference-pack";
 import { buildDirectorPlannerPrompt, createFallbackDirectorWorkflow, formatDirectorWorkflowText, parseDirectorWorkflow } from "../director/workflow-planner";
 import type { DirectorReferencePackItem, DirectorReferenceRole, DirectorWorkflow, DirectorWorkflowMaterialization, DirectorWorkflowReference, DirectorWorkflowRunReport } from "../director/types";
+import type { CanvasAgentAssetPackItem, CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
 
 type AssistantMode = "ask" | "image" | "director";
+type CanvasControlPanelMode = "director" | "local-agent";
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 type AssistantTaskState = Record<string, true>;
@@ -44,11 +46,18 @@ type CanvasAssistantPanelProps = {
     onExecuteDirectorWorkflow: (materialization: DirectorWorkflowMaterialization) => Promise<DirectorWorkflowRunReport>;
     onPasteImage: (file: File) => void;
     onAttachReferenceFile: (file: File, role: DirectorReferenceRole) => Promise<DirectorReferencePackItem | null>;
+    sharedReferencePack: DirectorReferencePackItem[];
+    onSharedReferencePackChange: (pack: DirectorReferencePackItem[]) => void;
+    sharedAssetPack: CanvasAgentAssetPackItem[];
+    sharedTaskQueue: CanvasAgentTaskQueueItem[];
+    panelMode: CanvasControlPanelMode;
+    onPanelModeChange: (mode: CanvasControlPanelMode) => void;
+    hidden?: boolean;
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onPasteImage, onAttachReferenceFile, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onPasteImage, onAttachReferenceFile, sharedReferencePack, onSharedReferencePackChange, sharedAssetPack, sharedTaskQueue, panelMode, onPanelModeChange, hidden = false, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -81,6 +90,18 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         onSessionsChange(localSessions, localActiveSessionId);
     }, [localActiveSessionId, localSessions, onSessionsChange]);
 
+    useEffect(() => {
+        setReferencePack((prev) => (packsEqual(prev, sharedReferencePack) ? prev : sharedReferencePack));
+    }, [sharedReferencePack]);
+
+    const updateReferencePack = (updater: (current: DirectorReferencePackItem[]) => DirectorReferencePackItem[]) => {
+        setReferencePack((prev) => {
+            const next = updater(prev);
+            onSharedReferencePackChange(next);
+            return next;
+        });
+    };
+
     const safeSessions = localSessions.length ? localSessions : [createSession()];
     const activeSession = useMemo(() => safeSessions.find((session) => session.id === localActiveSessionId) || safeSessions[0] || null, [localActiveSessionId, safeSessions]);
     const historySessions = safeSessions.filter((session) => session.messages.length > 0);
@@ -94,6 +115,17 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const assistantConfig = useMemo(() => ({ ...effectiveConfig, count: effectiveConfig.canvasImageCount || effectiveConfig.count }), [effectiveConfig]);
     const iconButtonStyle = { color: theme.node.muted };
     const hasRunningTasks = Object.keys(runningTasks).length > 0;
+    const sharedSummary = useMemo(
+        () => ({
+            nodes: nodes.length,
+            references: activeReferencePack.length,
+            assets: sharedAssetPack.length,
+            queue: sharedTaskQueue.length,
+            ready: sharedTaskQueue.filter((item) => item.runState === "ready" || item.runState === "planned").length,
+            running: sharedTaskQueue.filter((item) => item.runState === "running").length,
+        }),
+        [activeReferencePack.length, nodes.length, sharedAssetPack.length, sharedTaskQueue],
+    );
 
     useEffect(() => {
         setRemovedReferenceIds(new Set());
@@ -299,22 +331,25 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         <motion.div
             className="flex shrink-0"
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: closing ? 0 : width + 1, opacity: closing ? 0 : 1 }}
+            animate={{ width: closing || hidden ? 0 : width + 1, opacity: closing || hidden ? 0 : 1 }}
             transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: "clip", pointerEvents: closing ? "none" : undefined }}
+            style={{ display: hidden ? "none" : undefined, overflow: "clip", pointerEvents: closing || hidden ? "none" : undefined }}
         >
             <motion.aside
                 className="relative flex shrink-0 flex-col border-l"
                 initial={{ x: 48 }}
-                animate={{ x: closing ? 28 : 0 }}
+                animate={{ x: closing || hidden ? 28 : 0 }}
                 transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
                 style={{ width, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             >
                 <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" />
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <Sparkles className="size-4" />
-                        {view === "history" ? "历史记录" : "画布助手"}
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                            <Sparkles className="size-4 shrink-0" />
+                            <span className="truncate">{view === "history" ? "历史记录" : "创作控制台"}</span>
+                        </div>
+                        <PanelModeSwitch value={panelMode} theme={theme} onChange={onPanelModeChange} />
                     </div>
                     <div className="flex items-center gap-1">
                         {view === "history" ? (
@@ -360,6 +395,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         </Tooltip>
                     </div>
                 </div>
+                <DirectorSharedContextSummary theme={theme} summary={sharedSummary} />
 
                 <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
                     {view === "history" ? (
@@ -402,13 +438,13 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         onMissingConfig={() => openConfigDialog(true)}
                         onRemoveReference={(id) => {
                             setRemovedReferenceIds((prev) => new Set(prev).add(id));
-                            setReferencePack((prev) => prev.filter((item) => item.nodeId !== id));
+                            updateReferencePack((prev) => prev.filter((item) => item.nodeId !== id));
                             if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
                         }}
                         onPasteImage={onPasteImage}
                         onAttachReferenceFile={onAttachReferenceFile}
                         onReferenceRoleChange={(id, role) => {
-                            setReferencePack((prev) => {
+                            updateReferencePack((prev) => {
                                 const hasItem = prev.some((item) => item.id === id || item.nodeId === id);
                                 if (hasItem) return prev.map((item) => (item.id === id || item.nodeId === id ? { ...item, role } : item));
                                 const selectedItem = activeReferencePack.find((item) => item.id === id || item.nodeId === id);
@@ -416,7 +452,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                             });
                         }}
                         onAddReferencePackItem={(item) => {
-                            setReferencePack((prev) => mergeReferencePackItems([...prev, item]));
+                            updateReferencePack((prev) => mergeReferencePackItems([...prev, item]));
                             onSelectNodeIds(new Set([...Array.from(selectedNodeIds), item.nodeId]));
                         }}
                         modelCosts={modelCosts}
@@ -624,6 +660,57 @@ function AssistantModeSwitch({ mode, theme, onChange }: { mode: AssistantMode; t
                     </button>
                 </Tooltip>
             ))}
+        </div>
+    );
+}
+
+function PanelModeSwitch({ value, theme, onChange }: { value: CanvasControlPanelMode; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (mode: CanvasControlPanelMode) => void }) {
+    return (
+        <div className="flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
+            {[
+                { value: "director" as const, label: "导演台" },
+                { value: "local-agent" as const, label: "本地 Agent" },
+            ].map((item) => (
+                <button
+                    key={item.value}
+                    type="button"
+                    className="h-7 cursor-pointer rounded-full border-0 bg-transparent px-2.5 text-xs transition"
+                    style={{ background: value === item.value ? theme.node.activeStroke : "transparent", color: value === item.value ? theme.node.panel : theme.node.text }}
+                    onClick={() => onChange(item.value)}
+                >
+                    {item.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function DirectorSharedContextSummary({
+    theme,
+    summary,
+}: {
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    summary: { nodes: number; references: number; assets: number; queue: number; ready: number; running: number };
+}) {
+    const items = [
+        { label: "节点", value: summary.nodes },
+        { label: "参考", value: summary.references },
+        { label: "素材", value: summary.assets },
+        { label: "队列", value: summary.queue },
+    ];
+    return (
+        <div className="border-b px-4 py-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+            <div className="flex flex-wrap items-center gap-1.5">
+                {items.map((item) => (
+                    <span key={item.label} className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
+                        {item.label} {item.value}
+                    </span>
+                ))}
+                {summary.running ? <span className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: "rgba(217,119,6,.45)", color: "#d97706" }}>运行中 {summary.running}</span> : null}
+            </div>
+            <div className="mt-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
+                导演台负责故事板、一致性和任务依赖；本地 Agent 读取同一份上下文执行画布操作。
+            </div>
         </div>
     );
 }
@@ -849,6 +936,14 @@ function mergeReferencePackItems(items: DirectorReferencePackItem[]) {
     const byNodeId = new Map<string, DirectorReferencePackItem>();
     items.forEach((item) => byNodeId.set(item.nodeId, item));
     return Array.from(byNodeId.values());
+}
+
+function packsEqual(first: DirectorReferencePackItem[], second: DirectorReferencePackItem[]) {
+    if (first.length !== second.length) return false;
+    return first.every((item, index) => {
+        const other = second[index];
+        return Boolean(other && item.id === other.id && item.nodeId === other.nodeId && item.role === other.role);
+    });
 }
 
 function referenceToDirectorReference(reference: CanvasAssistantReference): DirectorWorkflowReference {

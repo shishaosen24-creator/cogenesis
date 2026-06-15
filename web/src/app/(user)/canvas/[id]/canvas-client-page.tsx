@@ -27,6 +27,7 @@ import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-conne
 import { CanvasConfigComposer } from "../components/canvas-config-composer";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
 import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
+import { CanvasLocalAgentPanel } from "../components/canvas-local-agent-panel";
 import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "../components/canvas-node-crop-dialog";
@@ -44,6 +45,7 @@ import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
+import { applyCanvasAgentOps, type CanvasAgentAssetPackItem, type CanvasAgentOp, type CanvasAgentSnapshot, type CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
 import { createDirectorReferencePackItemFromNode } from "../director/reference-pack";
 import { materializeDirectorWorkflow } from "../director/workflow-materializer";
 import type { DirectorReferencePackItem, DirectorReferenceRole, DirectorWorkflow, DirectorWorkflowMaterialization, DirectorWorkflowRunReport } from "../director/types";
@@ -78,6 +80,8 @@ type ConnectionDropTarget = {
     nodeId: string | null;
     isNearNode: boolean;
 };
+
+type CanvasControlPanelMode = "director" | "local-agent";
 
 type CanvasHistoryEntry = Pick<CanvasClipboard, "nodes" | "connections"> & {
     chatSessions: CanvasAssistantSession[];
@@ -288,6 +292,7 @@ function InfiniteCanvasPage() {
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const savedAssets = useAssetStore((state) => state.assets);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const createProject = useCanvasStore((state) => state.createProject);
@@ -335,6 +340,9 @@ function InfiniteCanvasPage() {
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [assistantCollapsed, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
+    const [assistantPanelMode, setAssistantPanelMode] = useState<CanvasControlPanelMode>("director");
+    const [agentUndoSnapshot, setAgentUndoSnapshot] = useState<CanvasAgentSnapshot | null>(null);
+    const [sharedReferencePack, setSharedReferencePack] = useState<DirectorReferencePackItem[]>([]);
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
@@ -395,6 +403,20 @@ function InfiniteCanvasPage() {
             showImageInfo,
         }),
         [activeChatId, backgroundMode, chatSessions, showImageInfo],
+    );
+
+    const createAgentSnapshot = useCallback(
+        (): CanvasAgentSnapshot => ({
+            projectId,
+            title: currentProject?.title || "未命名画布",
+            nodes: nodesRef.current,
+            connections: connectionsRef.current,
+            selectedNodeIds: Array.from(selectedNodeIdsRef.current),
+            viewport: viewportRef.current,
+            assetPack: buildAgentAssetPack(nodesRef.current, sharedReferencePack, savedAssets),
+            taskQueue: buildAgentTaskQueue(nodesRef.current, connectionsRef.current),
+        }),
+        [currentProject?.title, projectId, savedAssets, sharedReferencePack],
     );
 
     const cleanupCanvasFiles = useCallback(
@@ -727,6 +749,20 @@ function InfiniteCanvasPage() {
         nodes.forEach((node) => map.set(node.id, buildNodeMentionReferences(node, nodes, connections)));
         return map;
     }, [connections, nodes]);
+
+    const agentSnapshot = useMemo<CanvasAgentSnapshot>(
+        () => ({
+            projectId,
+            title: currentProject?.title || "未命名画布",
+            nodes,
+            connections,
+            selectedNodeIds: Array.from(selectedNodeIds),
+            viewport,
+            assetPack: buildAgentAssetPack(nodes, sharedReferencePack, savedAssets),
+            taskQueue: buildAgentTaskQueue(nodes, connections),
+        }),
+        [connections, currentProject?.title, nodes, projectId, savedAssets, selectedNodeIds, sharedReferencePack, viewport],
+    );
     const createNode = useCallback(
         (type: CanvasNodeType, position?: Position) => {
             const targetPosition = position || getCanvasCenter();
@@ -2303,6 +2339,55 @@ function InfiniteCanvasPage() {
         [effectiveConfig, handleGenerateNode, isAiConfigReady, message, openConfigDialog],
     );
 
+    const applyAgentOps = useCallback(
+        async (ops: CanvasAgentOp[]) => {
+            const safeOps = Array.isArray(ops) ? ops : [];
+            const before = createAgentSnapshot();
+            setAgentUndoSnapshot(before);
+
+            const structuralOps = safeOps.filter((op) => op.type !== "run_generation");
+            if (structuralOps.length) {
+                const next = applyCanvasAgentOps(before, structuralOps);
+                nodesRef.current = next.nodes;
+                connectionsRef.current = next.connections;
+                viewportRef.current = next.viewport;
+                selectedNodeIdsRef.current = new Set(next.selectedNodeIds);
+                setNodes(next.nodes);
+                setConnections(next.connections);
+                setViewport(next.viewport);
+                setSelectedNodeIds(new Set(next.selectedNodeIds));
+                setSelectedConnectionId(null);
+            }
+
+            for (const op of safeOps) {
+                if (op.type !== "run_generation") continue;
+                const node = nodesRef.current.find((item) => item.id === op.nodeId);
+                if (!node) continue;
+                const mode = normalizeAgentGenerationMode(op.mode, node);
+                const prompt = op.prompt ?? node.metadata?.composerContent ?? node.metadata?.prompt ?? (node.type === CanvasNodeType.Text ? node.metadata?.content : "") ?? "";
+                await handleGenerateNode(node.id, mode, prompt);
+            }
+
+            return createAgentSnapshot();
+        },
+        [createAgentSnapshot, handleGenerateNode],
+    );
+
+    const undoAgentOps = useCallback(() => {
+        if (!agentUndoSnapshot) return null;
+        nodesRef.current = agentUndoSnapshot.nodes;
+        connectionsRef.current = agentUndoSnapshot.connections;
+        viewportRef.current = agentUndoSnapshot.viewport;
+        selectedNodeIdsRef.current = new Set(agentUndoSnapshot.selectedNodeIds);
+        setNodes(agentUndoSnapshot.nodes);
+        setConnections(agentUndoSnapshot.connections);
+        setViewport(agentUndoSnapshot.viewport);
+        setSelectedNodeIds(new Set(agentUndoSnapshot.selectedNodeIds));
+        setSelectedConnectionId(null);
+        setAgentUndoSnapshot(null);
+        return agentUndoSnapshot;
+    }, [agentUndoSnapshot]);
+
     const handleRetryNode = useCallback(
         async (node: CanvasNodeData) => {
             const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
@@ -2850,6 +2935,26 @@ function InfiniteCanvasPage() {
                     onExecuteDirectorWorkflow={handleExecuteDirectorWorkflow}
                     onPasteImage={pasteAssistantImage}
                     onAttachReferenceFile={attachAssistantReferenceFile}
+                    sharedReferencePack={sharedReferencePack}
+                    onSharedReferencePackChange={setSharedReferencePack}
+                    sharedAssetPack={agentSnapshot.assetPack}
+                    sharedTaskQueue={agentSnapshot.taskQueue}
+                    panelMode={assistantPanelMode}
+                    onPanelModeChange={setAssistantPanelMode}
+                    hidden={assistantCollapsed}
+                    onCollapseStart={() => setAssistantCollapsed(true)}
+                    onCollapse={() => setAssistantMounted(false)}
+                />
+            ) : null}
+            {assistantMounted ? (
+                <CanvasLocalAgentPanel
+                    snapshot={agentSnapshot}
+                    canUndoOps={Boolean(agentUndoSnapshot)}
+                    collapsed={assistantCollapsed}
+                    panelMode={assistantPanelMode}
+                    onPanelModeChange={setAssistantPanelMode}
+                    onApplyOps={applyAgentOps}
+                    onUndoOps={undoAgentOps}
                     onCollapseStart={() => setAssistantCollapsed(true)}
                     onCollapse={() => setAssistantMounted(false)}
                 />
@@ -3247,11 +3352,100 @@ function withDirectorRunState(node: CanvasNodeData, runState: NonNullable<Canvas
     };
 }
 
+function buildAgentAssetPack(nodes: CanvasNodeData[], referencePack: DirectorReferencePackItem[], assets: ReturnType<typeof useAssetStore.getState>["assets"]): CanvasAgentAssetPackItem[] {
+    const selectedPack = referencePack.map((item) => ({
+        id: `director-reference:${item.nodeId}`,
+        title: item.title,
+        source: "director-reference" as const,
+        mediaType: item.mediaType,
+        nodeId: item.nodeId,
+        role: item.role,
+        summary: item.text || item.mimeType || item.storageKey,
+        storageKey: item.storageKey,
+        mimeType: item.mimeType,
+        width: item.width,
+        height: item.height,
+        durationMs: item.durationMs,
+    }));
+    const canvasPack = nodes
+        .map(createDirectorReferencePackItemFromNode)
+        .filter((item): item is DirectorReferencePackItem => Boolean(item))
+        .filter((item) => !selectedPack.some((selected) => selected.nodeId === item.nodeId))
+        .map((item) => ({
+            id: `canvas-node:${item.nodeId}`,
+            title: item.title,
+            source: "director-reference" as const,
+            mediaType: item.mediaType,
+            nodeId: item.nodeId,
+            role: item.role,
+            summary: item.text || item.mimeType || item.storageKey,
+            storageKey: item.storageKey,
+            mimeType: item.mimeType,
+            width: item.width,
+            height: item.height,
+            durationMs: item.durationMs,
+        }));
+    const savedPack = assets.slice(0, 80).map((asset) => ({
+        id: `asset:${asset.id}`,
+        title: asset.title,
+        source: "my-assets" as const,
+        mediaType: asset.kind,
+        assetId: asset.id,
+        summary: asset.kind === "text" ? asset.data.content.slice(0, 240) : asset.note || asset.source || asset.data.mimeType,
+        tags: asset.tags,
+        storageKey: asset.kind === "text" ? undefined : asset.data.storageKey,
+        mimeType: asset.kind === "text" ? undefined : asset.data.mimeType,
+        width: asset.kind === "text" ? undefined : asset.data.width,
+        height: asset.kind === "text" ? undefined : asset.data.height,
+    }));
+    return [...selectedPack, ...canvasPack, ...savedPack];
+}
+
+function buildAgentTaskQueue(nodes: CanvasNodeData[], connections: CanvasConnection[]): CanvasAgentTaskQueueItem[] {
+    const incoming = new Map<string, string[]>();
+    const outgoing = new Map<string, string[]>();
+    connections.forEach((connection) => {
+        incoming.set(connection.toNodeId, [...(incoming.get(connection.toNodeId) || []), connection.fromNodeId]);
+        outgoing.set(connection.fromNodeId, [...(outgoing.get(connection.fromNodeId) || []), connection.toNodeId]);
+    });
+
+    return nodes
+        .filter((node) => Boolean(node.metadata?.director))
+        .map((node) => {
+            const director = node.metadata!.director!;
+            return {
+                id: `${director.workflowId}:${director.stepId || node.id}`,
+                nodeId: node.id,
+                workflowId: director.workflowId,
+                stepId: director.stepId,
+                title: node.title,
+                role: director.role,
+                mode: director.mode || node.metadata?.generationMode,
+                prompt: node.metadata?.composerContent || node.metadata?.prompt || node.metadata?.content,
+                dependencyStepIds: director.dependencyStepIds,
+                plannedOrder: director.plannedOrder,
+                runState: director.runState || "planned",
+                connectedFrom: incoming.get(node.id) || [],
+                connectedTo: outgoing.get(node.id) || [],
+            } satisfies CanvasAgentTaskQueueItem;
+        })
+        .sort((first, second) => (first.plannedOrder ?? -1) - (second.plannedOrder ?? -1));
+}
+
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
 function capabilityForNode(node: CanvasNodeData): ModelCapability {
+    if (node.type === CanvasNodeType.Text) return "text";
+    if (node.type === CanvasNodeType.Video) return "video";
+    if (node.type === CanvasNodeType.Audio) return "audio";
+    return "image";
+}
+
+function normalizeAgentGenerationMode(mode: CanvasNodeGenerationMode | undefined, node: CanvasNodeData): CanvasNodeGenerationMode {
+    if (mode === "text" || mode === "image" || mode === "video" || mode === "audio") return mode;
+    if (node.metadata?.generationMode) return node.metadata.generationMode;
     if (node.type === CanvasNodeType.Text) return "text";
     if (node.type === CanvasNodeType.Video) return "video";
     if (node.type === CanvasNodeType.Audio) return "audio";
