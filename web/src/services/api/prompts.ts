@@ -1,4 +1,4 @@
-import { apiGet, compactApiParams } from "@/services/api/request";
+import { apiGet, apiPost, compactApiParams } from "@/services/api/request";
 
 export type Prompt = {
     id: string;
@@ -22,6 +22,15 @@ export type PromptListResponse = {
     total: number;
 };
 
+export type PromptSyncResult = {
+    syncedCategories: number;
+    failedCategories: number;
+    skipped: boolean;
+    message: string;
+    updatedAt: string;
+    errors: string[];
+};
+
 export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROMPTS_OPTION, page, pageSize }: { keyword?: string; tag?: string[]; category?: string; page?: number; pageSize?: number } = {}) {
     return apiGet<PromptListResponse>(
         "/api/prompts",
@@ -33,6 +42,10 @@ export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROM
             ...(pageSize ? { pageSize } : {}),
         }),
     );
+}
+
+export async function syncPromptsOnline() {
+    return apiPost<PromptSyncResult>("/api/prompts/sync");
 }
 
 export function formatPromptDate(value: string) {

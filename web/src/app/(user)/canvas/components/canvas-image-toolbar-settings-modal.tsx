@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, Card, Checkbox, Form, Modal, Space, Switch, Tag, Tooltip, Typography, theme as antdTheme } from "antd";
+import { Button, Checkbox, Form, Modal, Space, Switch, Tag, Tooltip } from "antd";
 import { Ellipsis, Image as ImageIcon, Settings2 } from "lucide-react";
 
 import type { ImageQuickToolId } from "./canvas-image-toolbar-tools";
@@ -50,7 +50,6 @@ export function ImageToolSettingsModal({
     onCancel: () => void;
     onSave: () => void;
 }) {
-    const { token } = antdTheme.useToken();
     const previewToolbarRef = useRef<HTMLDivElement>(null);
     const scrollbarTrackRef = useRef<HTMLInputElement>(null);
     const [previewScroll, setPreviewScroll] = useState<PreviewScroll>({ left: 0, max: 0, viewport: 1, content: 1 });
@@ -102,10 +101,12 @@ export function ImageToolSettingsModal({
         frames.push(firstFrame);
         const timer = window.setTimeout(sync, 120);
         const resizeObserver = typeof ResizeObserver !== "undefined" && toolbar ? new ResizeObserver(sync) : null;
-        resizeObserver?.observe(toolbar);
-        toolbar?.childNodes.forEach((child) => {
-            if (child instanceof Element) resizeObserver?.observe(child);
-        });
+        if (resizeObserver && toolbar) {
+            resizeObserver.observe(toolbar);
+            toolbar.childNodes.forEach((child) => {
+                if (child instanceof Element) resizeObserver.observe(child);
+            });
+        }
         sync();
         window.addEventListener("resize", syncPreviewScroll);
         return () => {
@@ -121,19 +122,25 @@ export function ImageToolSettingsModal({
 
     return (
         <Modal
-            title="自定义工具栏"
+            title={
+                <div className="canvas-image-toolbar-settings-title">
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">自定义工具栏</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">选择图片节点上方常驻显示的快捷工具</div>
+                </div>
+            }
+            className="canvas-image-toolbar-settings-modal"
             open={open}
             centered
             width={760}
             onCancel={onCancel}
             destroyOnHidden
             footer={
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2 text-sm text-[color:var(--sacred-on-surface-variant)]">
                         <span>显示按钮文字</span>
                         <Switch checked={showLabels} onChange={onShowLabelsChange} />
                     </div>
-                    <Space>
+                    <Space wrap>
                         <Button onClick={onCancel}>取消</Button>
                         <Button type="primary" onClick={onSave}>
                             保存
@@ -142,25 +149,20 @@ export function ImageToolSettingsModal({
                 </div>
             }
         >
-            <Typography.Paragraph type="secondary" className="!mb-4">
+            <div className="mb-4 text-sm text-[color:var(--sacred-on-surface-variant)]">
                 选择你想在图片节点编辑栏中使用的快捷工具。
-            </Typography.Paragraph>
+            </div>
 
-            <Card
-                size="small"
-                title={
-                    <Space size={6}>
-                        <Settings2 className="size-4" />
-                        节点预览
-                    </Space>
-                }
-                className="mb-4"
-            >
-                <div className="relative flex min-h-[300px] w-full justify-center pt-20 pb-9">
+            <div className="sacred-panel-soft mb-4 p-3">
+                <div className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[color:var(--sacred-on-surface)]">
+                    <Settings2 className="size-4" />
+                    节点预览
+                </div>
+                <div className="relative flex min-h-[300px] w-full justify-center rounded-lg border border-[color:var(--sacred-outline-variant)] bg-[rgba(18,20,19,0.28)] pt-20 pb-9">
                     <div
                         ref={previewToolbarRef}
-                        className="hide-scrollbar absolute left-2 right-2 top-3 z-10 flex h-12 items-center overflow-x-auto rounded-[18px] border px-1 text-[13px]"
-                        style={{ background: token.colorBgElevated, borderColor: token.colorBorderSecondary, boxShadow: token.boxShadowSecondary, color: token.colorText }}
+                        className="hide-scrollbar absolute left-2 right-2 top-3 z-10 flex h-12 items-center overflow-x-auto rounded-lg border px-1 text-[13px]"
+                        style={{ background: "rgba(30, 32, 31, 0.86)", borderColor: "rgba(233, 193, 118, 0.38)", boxShadow: "0 16px 40px rgba(0, 0, 0, 0.34)", color: "var(--sacred-on-surface)" }}
                         onScroll={syncPreviewScroll}
                     >
                         {previewTools.map((tool) => (
@@ -168,11 +170,11 @@ export function ImageToolSettingsModal({
                         ))}
                     </div>
                     <div
-                        className="flex h-48 w-full max-w-[360px] flex-col items-center justify-center rounded-xl border"
-                        style={{ background: token.colorFillAlter, borderColor: token.colorBorderSecondary, color: token.colorTextSecondary }}
+                        className="flex h-48 w-full max-w-[360px] flex-col items-center justify-center rounded-lg border"
+                        style={{ background: "rgba(30, 32, 31, 0.62)", borderColor: "rgba(142, 145, 146, 0.3)", color: "var(--sacred-on-surface-variant)" }}
                     >
                         <ImageIcon className="mb-2 size-8" />
-                        <Typography.Text type="secondary">图片节点</Typography.Text>
+                        <span className="text-sm">图片节点</span>
                     </div>
                     <input
                         ref={scrollbarTrackRef}
@@ -181,13 +183,13 @@ export function ImageToolSettingsModal({
                         max={Math.max(previewScroll.max, 1)}
                         value={Math.min(previewScroll.left, Math.max(previewScroll.max, 1))}
                         disabled={previewScroll.max <= 0}
-                        className="absolute bottom-4 left-10 right-10 h-2.5 cursor-pointer appearance-none bg-transparent disabled:cursor-default [&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-[var(--preview-scrollbar-thumb-width)] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#8d9498] [&::-moz-range-track]:h-2.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-[#bdc4c8] [&::-webkit-slider-runnable-track]:h-2.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#bdc4c8] [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-[var(--preview-scrollbar-thumb-width)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#8d9498]"
+                        className="canvas-toolbar-preview-range absolute bottom-4 left-10 right-10 h-2.5 cursor-pointer appearance-none bg-transparent disabled:cursor-default"
                         style={{ "--preview-scrollbar-thumb-width": `${scrollbarThumbWidth}px` } as CSSProperties}
                         onInput={(event) => setPreviewScrollLeft(Number(event.currentTarget.value))}
                         onChange={(event) => setPreviewScrollLeft(Number(event.target.value))}
                     />
                 </div>
-            </Card>
+            </div>
 
             <Form layout="vertical" className="!mb-0">
                 <Form.Item

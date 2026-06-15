@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { json } from "@codemirror/lang-json";
-import { App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography } from "antd";
+import { App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Tooltip, Typography } from "antd";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
@@ -360,7 +360,7 @@ export default function AdminSettingsPage() {
     return (
         <main style={{ padding: 24 }}>
             <Flex vertical gap={16}>
-                <Card variant="borderless">
+                <Card variant="borderless" className="sacred-panel-soft">
                     <Flex justify="space-between" align="center" gap={16} wrap>
                         <Tabs
                             activeKey={activeTab}
@@ -381,7 +381,7 @@ export default function AdminSettingsPage() {
                     </Flex>
                 </Card>
 
-                <Card variant="borderless">
+                <Card variant="borderless" className="sacred-panel-soft">
                     <Flex justify="space-between" align="center" gap={16} wrap style={{ marginBottom: 16 }}>
                         <Segmented
                             value={activeMode}
@@ -459,6 +459,7 @@ export default function AdminSettingsPage() {
                                             rowKey="model"
                                             pagination={false}
                                             size="small"
+                                            scroll={{ x: 520 }}
                                             dataSource={publicModels.map((model) => ({ model, credits: modelCostCredits(modelCosts, model) }))}
                                             columns={[
                                                 { title: "模型", dataIndex: "model" },
@@ -467,15 +468,12 @@ export default function AdminSettingsPage() {
                                                     dataIndex: "credits",
                                                     width: 220,
                                                     render: (_, item) => (
-                                                        <InputNumber
-                                                            min={0}
-                                                            step={1}
-                                                            precision={0}
-                                                            className="!w-full"
-                                                            value={item.credits}
-                                                            addonAfter="点"
-                                                            onChange={(value) => setModelCost(form, setModelCosts, item.model, Number(value) || 0)}
-                                                        />
+                                                        <Space.Compact style={{ width: "100%" }}>
+                                                            <InputNumber min={0} step={1} precision={0} style={{ width: "100%" }} value={item.credits} onChange={(value) => setModelCost(form, setModelCosts, item.model, Number(value) || 0)} />
+                                                            <Button disabled style={{ pointerEvents: "none" }}>
+                                                                点
+                                                            </Button>
+                                                        </Space.Compact>
                                                     ),
                                                 },
                                             ]}
@@ -500,6 +498,7 @@ export default function AdminSettingsPage() {
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
                                 <Card
+                                    className="sacred-panel-soft"
                                     size="small"
                                     title={
                                         <Space>
@@ -534,7 +533,7 @@ export default function AdminSettingsPage() {
                                         </Row>
                                     </Flex>
                                 </Card>
-                                <Card size="small" title="提示词定时同步">
+                                <Card className="sacred-panel-soft" size="small" title="提示词定时同步">
                                     <Row gutter={16} align="middle">
                                         <Col xs={24} md={8}>
                                             <Form.Item name={["private", "promptSync", "enabled"]} label="开启定时同步" valuePropName="checked">
@@ -542,7 +541,7 @@ export default function AdminSettingsPage() {
                                             </Form.Item>
                                         </Col>
                                         <Col xs={24} md={16}>
-                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="默认每 5 分钟同步内置 GitHub 远程提示词源">
+                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="默认每 5 分钟同步内置远程提示词源">
                                                 <Input placeholder="*/5 * * * *" />
                                             </Form.Item>
                                         </Col>
@@ -554,6 +553,7 @@ export default function AdminSettingsPage() {
                                 <Table
                                     rowKey="_rowKey"
                                     pagination={false}
+                                    scroll={{ x: 880 }}
                                     dataSource={channelTableData}
                                     columns={[
                                         { title: "名称", dataIndex: "name", render: (value) => value || "未命名渠道" },
@@ -572,26 +572,30 @@ export default function AdminSettingsPage() {
                                         {
                                             title: "操作",
                                             key: "actions",
-                                            width: 220,
+                                            width: 132,
                                             align: "right",
                                             render: (_, item) => (
                                                 <Space size={4}>
-                                                    <Button size="small" onClick={() => openTestDialog(item._index)}>
-                                                        测试
-                                                    </Button>
-                                                    <Button size="small" onClick={() => openChannelDrawer(item._index)}>
-                                                        编辑
-                                                    </Button>
-                                                    <Button
-                                                        danger
-                                                        size="small"
-                                                        icon={<DeleteOutlined />}
-                                                        onClick={() => {
-                                                            const nextChannels = [...channels];
-                                                            nextChannels.splice(item._index, 1);
-                                                            void persistChannels(nextChannels);
-                                                        }}
-                                                    />
+                                                    <Tooltip title="测试">
+                                                        <Button aria-label="测试渠道" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<ExperimentOutlined />} onClick={() => openTestDialog(item._index)} />
+                                                    </Tooltip>
+                                                    <Tooltip title="编辑">
+                                                        <Button aria-label="编辑渠道" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EditOutlined />} onClick={() => openChannelDrawer(item._index)} />
+                                                    </Tooltip>
+                                                    <Tooltip title="删除">
+                                                        <Button
+                                                            aria-label="删除渠道"
+                                                            danger
+                                                            size="small"
+                                                            className="!h-7 !w-7 !min-w-7 !p-0"
+                                                            icon={<DeleteOutlined />}
+                                                            onClick={() => {
+                                                                const nextChannels = [...channels];
+                                                                nextChannels.splice(item._index, 1);
+                                                                void persistChannels(nextChannels);
+                                                            }}
+                                                        />
+                                                    </Tooltip>
                                                 </Space>
                                             ),
                                         },
@@ -614,104 +618,129 @@ export default function AdminSettingsPage() {
                     )}
                 </Card>
                 <Drawer
-                    title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
+                    className="sacred-admin-channel-drawer"
+                    title={
+                        <Flex vertical gap={4}>
+                            <span className="sacred-label">MODEL CHANNEL</span>
+                            <Typography.Title level={4} className="sacred-title !m-0">
+                                {editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
+                            </Typography.Title>
+                            <Typography.Text className="sacred-muted">OpenAI 协议、接口地址和可用模型</Typography.Text>
+                        </Flex>
+                    }
                     open={isChannelDrawerOpen}
                     size={560}
                     onClose={closeChannelDrawer}
                     extra={
-                        <Space>
-                            <Button onClick={closeChannelDrawer}>取消</Button>
-                            <Button type="primary" onClick={() => void saveChannel()}>
+                        <div className="sacred-admin-editor-actions">
+                            <Button autoInsertSpace={false} onClick={closeChannelDrawer}>
+                                取消
+                            </Button>
+                            <Button type="primary" autoInsertSpace={false} onClick={() => void saveChannel()}>
                                 保存
                             </Button>
-                        </Space>
+                        </div>
                     }
                     destroyOnHidden
                 >
-                    <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel}>
-                        <Row gutter={16}>
-                            <Col span={12}>
-                                <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
-                                    <Input />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="protocol" label="协议">
-                                    <Select options={[{ label: "OpenAI", value: "openai" }]} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="weight" label="权重">
-                                    <InputNumber min={1} step={1} className="!w-full" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="enabled" label="启用" valuePropName="checked">
-                                    <Switch />
-                                </Form.Item>
-                            </Col>
-                            <Col span={24}>
-                                <Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}>
-                                    <Input />
-                                </Form.Item>
-                            </Col>
-                            <Col span={24}>
-                                <Form.Item name="apiKey" label="API Key" rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}>
-                                    <Input.Password placeholder={editingChannelIndex === null ? "" : "留空则沿用已保存的 API Key"} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={24}>
-                                <Form.Item label="渠道可用模型">
-                                    <Space.Compact style={{ width: "100%" }}>
-                                        <Form.Item name="models" noStyle>
-                                            <Select mode="tags" maxTagCount="responsive" tokenSeparators={[",", "\n"]} options={knownModels.map((model) => ({ label: model, value: model }))} />
-                                        </Form.Item>
-                                        <Button onClick={() => openChannelModelSelector()}>选择模型</Button>
-                                    </Space.Compact>
-                                </Form.Item>
-                            </Col>
-                            <Col span={24}>
-                                <Form.Item name="remark" label="备注">
-                                    <Input.TextArea rows={3} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </Form>
+                    <div className="sacred-admin-editor-body">
+                        <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel}>
+                            <Row gutter={16}>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
+                                        <Input />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="protocol" label="协议">
+                                        <Select options={[{ label: "OpenAI", value: "openai" }]} />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="weight" label="权重">
+                                        <InputNumber min={1} step={1} className="!w-full" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <Form.Item name="enabled" label="启用" valuePropName="checked">
+                                        <Switch />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={24}>
+                                    <Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}>
+                                        <Input />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={24}>
+                                    <Form.Item name="apiKey" label="API Key" rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}>
+                                        <Input.Password placeholder={editingChannelIndex === null ? "" : "留空则沿用已保存的 API Key"} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={24}>
+                                    <Form.Item label="渠道可用模型">
+                                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                            <Form.Item name="models" noStyle>
+                                                <Select className="min-w-0" mode="tags" maxTagCount="responsive" tokenSeparators={[",", "\n"]} options={knownModels.map((model) => ({ label: model, value: model }))} />
+                                            </Form.Item>
+                                            <Button className="w-full sm:w-auto" autoInsertSpace={false} onClick={() => openChannelModelSelector()}>
+                                                选择模型
+                                            </Button>
+                                        </div>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={24}>
+                                    <Form.Item name="remark" label="备注">
+                                        <Input.TextArea rows={3} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        </Form>
+                    </div>
                 </Drawer>
                 <Modal
+                    className="sacred-admin-editor-modal sacred-admin-settings-modal"
                     title={
-                        <Space size={12}>
-                            选择渠道模型
-                            <Typography.Text type="secondary">
+                        <Flex vertical gap={4}>
+                            <span className="sacred-label">MODEL SELECTOR</span>
+                            <Typography.Title level={4} className="sacred-title !m-0">
+                                选择渠道模型
+                            </Typography.Title>
+                            <Typography.Text className="sacred-muted">
                                 已选择 {modelSelectSelected.length} / {uniqueModels([...modelSelectSource, ...modelSelectExisting]).length}
                             </Typography.Text>
-                        </Space>
+                        </Flex>
                     }
                     open={isModelSelectorOpen}
                     width={960}
                     onCancel={closeChannelModelSelector}
                     footer={
-                        <Space>
-                            <Button onClick={closeChannelModelSelector}>取消</Button>
-                            <Button type="primary" onClick={confirmChannelModelSelector}>
+                        <div className="sacred-admin-editor-actions">
+                            <Button autoInsertSpace={false} onClick={closeChannelModelSelector}>
+                                取消
+                            </Button>
+                            <Button type="primary" autoInsertSpace={false} onClick={confirmChannelModelSelector}>
                                 确定
                             </Button>
-                        </Space>
+                        </div>
                     }
                     destroyOnHidden
                 >
-                    <Flex vertical gap={14}>
-                        <Flex gap={12} wrap>
-                            <Input.Search placeholder="搜索模型" allowClear value={modelSelectKeyword} onChange={(event) => setModelSelectKeyword(event.target.value)} style={{ flex: "1 1 260px" }} />
-                            <Space.Compact style={{ flex: "1 1 320px" }}>
-                                <Input value={modelSelectNewModel} placeholder="输入模型名称" onChange={(event) => setModelSelectNewModel(event.target.value)} onPressEnter={addModelInSelector} />
-                                <Button onClick={addModelInSelector}>增加模型</Button>
-                                <Button icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
+                    <div className="sacred-admin-editor-body sacred-admin-settings-modal-body space-y-4">
+                        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
+                            <Input.Search placeholder="搜索模型" allowClear value={modelSelectKeyword} onChange={(event) => setModelSelectKeyword(event.target.value)} />
+                            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                                <Input className="min-w-0" value={modelSelectNewModel} placeholder="输入模型名称" onChange={(event) => setModelSelectNewModel(event.target.value)} onPressEnter={addModelInSelector} />
+                                <Button autoInsertSpace={false} onClick={addModelInSelector}>
+                                    增加模型
+                                </Button>
+                                <Button autoInsertSpace={false} icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
                                     拉取模型列表
                                 </Button>
-                            </Space.Compact>
-                        </Flex>
-                        <Typography.Text type="secondary">如果上游不提供 OpenAI /models 模型列表接口，请在这里手动增加模型名称。</Typography.Text>
+                            </div>
+                        </div>
+                        <Typography.Text type="secondary" className="block break-words">
+                            如果上游不提供 OpenAI /models 模型列表接口，请在这里手动增加模型名称。
+                        </Typography.Text>
                         <Tabs
                             activeKey={modelSelectTab}
                             onChange={(key) => setModelSelectTab(key as ModelSelectTabKey)}
@@ -720,11 +749,11 @@ export default function AdminSettingsPage() {
                                 { key: "current", label: `已有的模型 (${modelSelectGroups.current.length})` },
                             ]}
                         />
-                        <Flex justify="space-between" align="center" gap={12} wrap>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <Typography.Text type="secondary">
                                 当前列表已选择 {activeSelectedCount} / {activeModelSelectModels.length}
                             </Typography.Text>
-                            <Space size={8}>
+                            <Space size={[8, 8]} wrap>
                                 <Button size="small" disabled={!activeModelSelectModels.length || activeSelectedCount === activeModelSelectModels.length} onClick={selectActiveModels}>
                                     全选当前列表
                                 </Button>
@@ -732,57 +761,68 @@ export default function AdminSettingsPage() {
                                     取消当前列表
                                 </Button>
                             </Space>
-                        </Flex>
-                        <div style={{ maxHeight: 420, overflowY: "auto", borderTop: "1px solid var(--ant-color-border-secondary)", paddingTop: 12 }}>
+                        </div>
+                        <div className="sacred-panel-soft max-h-[420px] overflow-y-auto p-3">
                             {activeModelSelectModels.length ? (
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 24, rowGap: 12 }}>
+                                <div className="grid gap-3 sm:grid-cols-2">
                                     {activeModelSelectModels.map((model) => (
-                                        <Checkbox key={model} checked={modelSelectSelected.includes(model)} onChange={(event) => toggleSelectedModel(model, event.target.checked)}>
-                                            <Typography.Text style={{ wordBreak: "break-all" }}>{model}</Typography.Text>
+                                        <Checkbox key={model} className="min-w-0" checked={modelSelectSelected.includes(model)} onChange={(event) => toggleSelectedModel(model, event.target.checked)}>
+                                            <Typography.Text className="break-all">{model}</Typography.Text>
                                         </Checkbox>
                                     ))}
                                 </div>
                             ) : (
-                                <div style={{ padding: "48px 0", textAlign: "center" }}>
+                                <div className="sacred-empty-state py-12 text-center">
                                     <Typography.Text type="secondary">没有匹配的模型</Typography.Text>
                                 </div>
                             )}
                         </div>
-                    </Flex>
+                    </div>
                 </Modal>
                 <Modal
+                    className="sacred-admin-editor-modal sacred-admin-settings-modal"
                     title={
-                        <Space>
-                            {testChannel?.name || "渠道"} 渠道的模型测试<Typography.Text type="secondary">共 {testChannel?.models.length || 0} 个模型</Typography.Text>
-                        </Space>
+                        <Flex vertical gap={4}>
+                            <span className="sacred-label">MODEL TEST</span>
+                            <Typography.Title level={4} className="sacred-title !m-0">
+                                {testChannel?.name || "渠道"} 渠道的模型测试
+                            </Typography.Title>
+                            <Typography.Text className="sacred-muted">
+                                共 {testChannel?.models.length || 0} 个模型
+                            </Typography.Text>
+                        </Flex>
                     }
                     open={testChannelIndex !== null}
                     width={920}
                     onCancel={closeTestDialog}
                     footer={
-                        <Space>
-                            <Button onClick={closeTestDialog}>取消</Button>
-                            <Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
+                        <div className="sacred-admin-editor-actions">
+                            <Button autoInsertSpace={false} onClick={closeTestDialog}>
+                                取消
+                            </Button>
+                            <Button type="primary" autoInsertSpace={false} disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
                                 批量测试 {selectedTestModels.length} 个模型
                             </Button>
-                        </Space>
+                        </div>
                     }
                     destroyOnHidden
                 >
-                    <Flex vertical gap={12}>
-                        <Typography.Text type="secondary">普通文本模型会发送一条 hi；Agent Plan / Seedance 视频模型只做配置格式检查，不会发起视频生成，也不代表模型权限已验证。</Typography.Text>
+                    <div className="sacred-admin-editor-body sacred-admin-settings-modal-body space-y-3">
+                        <Typography.Text type="secondary" className="block break-words">
+                            普通文本模型会发送一条 hi；Agent Plan / Seedance 视频模型只做配置格式检查，不会发起视频生成，也不代表模型权限已验证。
+                        </Typography.Text>
                         <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
                         <Table
                             rowKey="model"
                             pagination={false}
-                            scroll={{ y: 420 }}
+                            scroll={{ x: 640, y: 420 }}
                             dataSource={testModels.map((model) => ({ model }))}
                             rowSelection={{
                                 selectedRowKeys: selectedTestModels,
                                 onChange: (keys) => setSelectedTestModels(keys.map(String)),
                             }}
                             columns={[
-                                { title: "模型名称", dataIndex: "model", render: (value) => <Typography.Text strong>{value}</Typography.Text> },
+                                { title: "模型名称", dataIndex: "model", render: (value) => <Typography.Text strong className="break-all">{value}</Typography.Text> },
                                 {
                                     title: "状态",
                                     dataIndex: "model",
@@ -797,24 +837,26 @@ export default function AdminSettingsPage() {
                                                 <Typography.Text type="secondary">请求时长: {result.duration}</Typography.Text>
                                             </Space>
                                         ) : (
-                                            <Typography.Text type="danger">{result.message}</Typography.Text>
+                                            <Typography.Text type="danger" className="break-words">
+                                                {result.message}
+                                            </Typography.Text>
                                         );
                                     },
                                 },
                                 {
                                     title: "操作",
                                     key: "actions",
-                                    width: 120,
+                                    width: 88,
                                     align: "right",
                                     render: (_, item) => (
-                                        <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>
-                                            测试
-                                        </Button>
+                                        <Tooltip title="测试">
+                                            <Button aria-label="测试模型" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<ExperimentOutlined />} loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)} />
+                                        </Tooltip>
                                     ),
                                 },
                             ]}
                         />
-                    </Flex>
+                    </div>
                 </Modal>
             </Flex>
         </main>

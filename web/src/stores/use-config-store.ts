@@ -11,6 +11,14 @@ export type AiConfig = {
     channelMode: "remote" | "local";
     baseUrl: string;
     apiKey: string;
+    textBaseUrl: string;
+    textApiKey: string;
+    imageBaseUrl: string;
+    imageApiKey: string;
+    videoBaseUrl: string;
+    videoApiKey: string;
+    audioBaseUrl: string;
+    audioApiKey: string;
     model: string;
     imageModel: string;
     videoModel: string;
@@ -52,6 +60,14 @@ export const defaultConfig: AiConfig = {
     channelMode: "local",
     baseUrl: "https://api.openai.com",
     apiKey: "",
+    textBaseUrl: "",
+    textApiKey: "",
+    imageBaseUrl: "",
+    imageApiKey: "",
+    videoBaseUrl: "",
+    videoApiKey: "",
+    audioBaseUrl: "",
+    audioApiKey: "",
     model: "gpt-image-2",
     imageModel: "gpt-image-2",
     videoModel: "grok-imagine-video",
@@ -96,7 +112,7 @@ type ConfigStore = {
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
     updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
     loadPublicSettings: () => Promise<void>;
-    isAiConfigReady: (config: AiConfig, model: string) => boolean;
+    isAiConfigReady: (config: AiConfig, model: string, capability?: ModelCapability) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean) => void;
     setConfigDialogOpen: (isOpen: boolean) => void;
     clearPromptContinue: () => void;
@@ -180,8 +196,9 @@ function modelListKey(capability: ModelCapability) {
     return `${capability}Models` as "imageModels" | "videoModels" | "textModels" | "audioModels";
 }
 
-function isAiConfigReady(config: AiConfig, model: string) {
-    return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
+function isAiConfigReady(config: AiConfig, model: string, capability?: ModelCapability) {
+    const endpoint = getCapabilityEndpoint(config, capability);
+    return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(endpoint.baseUrl.trim() && endpoint.apiKey.trim()));
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -216,7 +233,7 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ isPublicSettingsLoading: false });
                 }
             },
-            isAiConfigReady: (config, model) => isAiConfigReady(config, model),
+            isAiConfigReady: (config, model, capability) => isAiConfigReady(config, model, capability),
             openConfigDialog: (shouldPromptContinue = false) => set({ isConfigOpen: true, shouldPromptContinue }),
             setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
             clearPromptContinue: () => set({ shouldPromptContinue: false }),
@@ -235,6 +252,14 @@ export const useConfigStore = create<ConfigStore>()(
                     config: {
                         ...config,
                         channelMode: config.channelMode || "remote",
+                        textBaseUrl: config.textBaseUrl || "",
+                        textApiKey: config.textApiKey || "",
+                        imageBaseUrl: config.imageBaseUrl || "",
+                        imageApiKey: config.imageApiKey || "",
+                        videoBaseUrl: config.videoBaseUrl || "",
+                        videoApiKey: config.videoApiKey || "",
+                        audioBaseUrl: config.audioBaseUrl || "",
+                        audioApiKey: config.audioApiKey || "",
                         imageModel: config.imageModel || config.model,
                         videoModel: config.videoModel || "grok-imagine-video",
                         textModel: config.textModel || config.model,
@@ -275,6 +300,19 @@ export function buildApiUrl(baseUrl: string, path: string) {
     const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
     const apiBaseUrl = lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
     return `${apiBaseUrl}${path}`;
+}
+
+export function buildCapabilityApiUrl(config: AiConfig, capability: ModelCapability, path: string) {
+    if (config.channelMode === "remote") return `/api/v1${path}`;
+    return buildApiUrl(getCapabilityEndpoint(config, capability).baseUrl, path);
+}
+
+export function getCapabilityEndpoint(config: AiConfig, capability?: ModelCapability) {
+    if (capability === "text") return { baseUrl: config.textBaseUrl || config.baseUrl, apiKey: config.textApiKey || config.apiKey };
+    if (capability === "image") return { baseUrl: config.imageBaseUrl || config.baseUrl, apiKey: config.imageApiKey || config.apiKey };
+    if (capability === "video") return { baseUrl: config.videoBaseUrl || config.baseUrl, apiKey: config.videoApiKey || config.apiKey };
+    if (capability === "audio") return { baseUrl: config.audioBaseUrl || config.baseUrl, apiKey: config.audioApiKey || config.apiKey };
+    return { baseUrl: config.baseUrl, apiKey: config.apiKey };
 }
 
 function normalizeArkPlanBaseUrl(baseUrl: string) {

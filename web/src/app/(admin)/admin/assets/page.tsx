@@ -57,7 +57,7 @@ export default function AdminAssetsPage() {
             title: "封面",
             dataIndex: "coverUrl",
             width: 88,
-            render: (_, item) => <Image src={item.coverUrl || item.url || "/logo.svg"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/logo.svg" />,
+            render: (_, item) => <Image src={item.coverUrl || item.url || "/brand/site-logo-transparent.png"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/brand/site-logo-transparent.png" />,
         },
         {
             title: "标题",
@@ -98,16 +98,17 @@ export default function AdminAssetsPage() {
             key: "actions",
             width: 112,
             align: "right",
+            fixed: "right",
             render: (_, item) => (
                 <Space size={4}>
                     <Tooltip title="详情">
-                        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setDetailAsset(item)} />
+                        <Button aria-label="查看素材详情" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EyeOutlined />} onClick={() => setDetailAsset(item)} />
                     </Tooltip>
                     <Tooltip title="编辑">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingAsset(item)} />
+                        <Button aria-label="编辑素材" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EditOutlined />} onClick={() => setEditingAsset(item)} />
                     </Tooltip>
                     <Tooltip title="删除">
-                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingAsset(item)} />
+                        <Button aria-label="删除素材" danger type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<DeleteOutlined />} onClick={() => setDeletingAsset(item)} />
                     </Tooltip>
                 </Space>
             ),
@@ -117,7 +118,7 @@ export default function AdminAssetsPage() {
     return (
         <main style={{ padding: 24 }}>
             <Flex vertical gap={16}>
-                <Card variant="borderless">
+                <Card variant="borderless" className="sacred-panel-soft sacred-admin-filter-card">
                     <Form layout="vertical">
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
@@ -163,7 +164,8 @@ export default function AdminAssetsPage() {
                     search={false}
                     defaultSize="middle"
                     tableLayout="fixed"
-                    cardProps={{ variant: "borderless" }}
+                    scroll={{ x: 880 }}
+                    cardProps={{ variant: "borderless", className: "sacred-panel-soft" }}
                     headerTitle={
                         <Space>
                             <Typography.Text strong>素材列表</Typography.Text>
@@ -188,83 +190,136 @@ export default function AdminAssetsPage() {
                 />
             </Flex>
 
-            <Modal title={editingAsset?.id ? "编辑素材" : "新增素材"} open={Boolean(editingAsset)} width={760} onCancel={() => setEditingAsset(null)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
-                <Form form={form} layout="vertical" requiredMark={false}>
-                    <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
-                        <Select options={editTypeOptions} />
-                    </Form.Item>
-                    <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="coverUrl" label="封面 URL">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="tagText" label="标签，用逗号分隔">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="category" label="分类">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="description" label="描述">
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
-                    {formType === "image" ? (
-                        <Form.Item name="url" label="图片 URL" rules={[{ required: true, message: "请输入图片 URL" }]}>
+            <Modal
+                className="sacred-admin-editor-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">ASSET VAULT</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            {editingAsset?.id ? "编辑素材" : "新增素材"}
+                        </Typography.Title>
+                        <Typography.Text className="sacred-muted">素材标题、分类、标签与内容地址</Typography.Text>
+                    </Flex>
+                }
+                open={Boolean(editingAsset)}
+                width={760}
+                onCancel={() => setEditingAsset(null)}
+                footer={
+                    <div className="sacred-admin-editor-actions">
+                        <Button autoInsertSpace={false} onClick={() => setEditingAsset(null)}>
+                            取消
+                        </Button>
+                        <Button type="primary" autoInsertSpace={false} onClick={() => void saveAsset()}>
+                            保存
+                        </Button>
+                    </div>
+                }
+                destroyOnHidden
+            >
+                <div className="sacred-admin-editor-body">
+                    <Form form={form} layout="vertical" requiredMark={false}>
+                        <Typography.Text strong className="sacred-admin-section-title">
+                            素材信息
+                        </Typography.Text>
+                        <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
+                            <Select options={editTypeOptions} />
+                        </Form.Item>
+                        <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                             <Input />
                         </Form.Item>
-                    ) : (
-                        <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                            <Input.TextArea rows={6} />
+                        <Form.Item name="coverUrl" label="封面 URL">
+                            <Input />
                         </Form.Item>
-                    )}
-                </Form>
+                        <Form.Item name="tagText" label="标签，用逗号分隔">
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="category" label="分类">
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="description" label="描述">
+                            <Input.TextArea rows={3} />
+                        </Form.Item>
+                        {formType === "image" ? (
+                            <Form.Item name="url" label="图片 URL" rules={[{ required: true, message: "请输入图片 URL" }]}>
+                                <Input />
+                            </Form.Item>
+                        ) : (
+                            <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
+                                <Input.TextArea rows={6} />
+                            </Form.Item>
+                        )}
+                    </Form>
+                </div>
             </Modal>
 
             <Modal title="素材详情" open={Boolean(detailAsset)} width={760} onCancel={() => setDetailAsset(null)} footer={<Button onClick={() => setDetailAsset(null)}>关闭</Button>}>
                 {detailAsset ? (
-                    <Flex vertical gap={14}>
-                        <Flex gap={14} align="start">
-                            <Image src={detailAsset.coverUrl || detailAsset.url || "/logo.svg"} alt={detailAsset.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
-                            <Flex vertical gap={8} style={{ minWidth: 0 }}>
-                                <Typography.Title level={5} style={{ margin: 0 }}>
+                    <div className="space-y-4 text-[color:var(--sacred-on-surface)]">
+                        <div className="grid gap-4 sm:grid-cols-[116px_minmax(0,1fr)] sm:items-start">
+                            <Image src={detailAsset.coverUrl || detailAsset.url || "/brand/site-logo-transparent.png"} alt={detailAsset.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/brand/site-logo-transparent.png" />
+                            <div className="min-w-0 space-y-2">
+                                <Typography.Title level={5} className="!m-0 break-words !text-[color:var(--sacred-on-surface)]">
                                     {detailAsset.title}
                                 </Typography.Title>
-                                <Space wrap>
+                                <Space size={[4, 4]} wrap>
                                     <Tag>{detailAsset.type === "image" ? "图片" : "文本"}</Tag>
                                     {detailAsset.category ? <Tag>{detailAsset.category}</Tag> : null}
                                     {(detailAsset.tags || []).map((tag) => (
                                         <Tag key={tag}>{tag}</Tag>
                                     ))}
                                 </Space>
-                            </Flex>
-                        </Flex>
+                            </div>
+                        </div>
                         {detailAsset.description ? (
-                            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                            <Typography.Paragraph type="secondary" className="!m-0 break-words !text-[color:var(--sacred-on-surface-variant)]">
                                 {detailAsset.description}
                             </Typography.Paragraph>
                         ) : null}
-                        <Input.TextArea value={detailAsset.type === "image" ? detailAsset.url || detailAsset.coverUrl : detailAsset.content} rows={7} readOnly />
-                        <Button icon={<CopyOutlined />} onClick={() => copyText(detailAsset.type === "image" ? detailAsset.url || detailAsset.coverUrl : detailAsset.content)}>
-                            复制内容
-                        </Button>
-                    </Flex>
+                        <div className="sacred-panel-soft max-h-72 overflow-y-auto whitespace-pre-wrap break-words p-4 text-sm leading-6 text-[color:var(--sacred-on-surface)]">
+                            {detailAsset.type === "image" ? detailAsset.url || detailAsset.coverUrl || "暂无图片地址" : detailAsset.content || "暂无文本内容"}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button icon={<CopyOutlined />} onClick={() => copyText(detailAsset.type === "image" ? detailAsset.url || detailAsset.coverUrl : detailAsset.content)}>
+                                复制内容
+                            </Button>
+                        </div>
+                    </div>
                 ) : null}
             </Modal>
 
             <Modal
-                title="删除素材"
+                className="sacred-admin-delete-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">DELETE ASSET</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            删除素材
+                        </Typography.Title>
+                    </Flex>
+                }
                 open={Boolean(deletingAsset)}
                 onCancel={() => setDeletingAsset(null)}
-                onOk={async () => {
-                    if (!deletingAsset) return;
-                    await deleteAsset(deletingAsset.id);
-                    setDeletingAsset(null);
-                }}
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                cancelText="取消"
+                footer={
+                    <div className="sacred-admin-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeletingAsset(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            danger
+                            type="primary"
+                            autoInsertSpace={false}
+                            onClick={async () => {
+                                if (!deletingAsset) return;
+                                await deleteAsset(deletingAsset.id);
+                                setDeletingAsset(null);
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </div>
+                }
             >
-                确定删除「{deletingAsset?.title}」吗？删除后会从服务器素材库中移除。
+                <div className="sacred-admin-delete-body">确定删除「{deletingAsset?.title}」吗？删除后会从服务器素材库中移除。</div>
             </Modal>
         </main>
     );

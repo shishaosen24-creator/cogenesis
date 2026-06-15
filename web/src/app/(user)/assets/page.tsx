@@ -2,7 +2,7 @@
 
 import { Copy, Download, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Card, Drawer, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -188,12 +188,13 @@ export default function AssetsPage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
-            <main className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.14)_1px,transparent_1px)]">
+        <div className="sacred-page-shell flex h-full flex-col overflow-hidden">
+            <main className="sacred-page-content min-h-0 flex-1 overflow-y-auto px-6 py-8">
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的素材</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
+                        <div className="sacred-label">asset vault</div>
+                        <h1 className="sacred-title mt-3 text-4xl font-semibold">我的素材</h1>
+                        <p className="mt-3 text-sm text-[color:var(--sacred-on-surface-variant)]">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
                     </div>
 
                     <div className="mx-auto mt-8 w-full max-w-2xl">
@@ -218,7 +219,7 @@ export default function AssetsPage() {
                     <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
-                                <div className="text-xs font-medium text-stone-500 dark:text-stone-400">类型</div>
+                                <div className="text-xs font-medium text-[color:var(--sacred-on-surface-variant)]">类型</div>
                                 <div className="flex flex-wrap gap-2">
                                     {kindOptions.map((option) => (
                                         <Tag.CheckableTag
@@ -238,21 +239,21 @@ export default function AssetsPage() {
                             <div className="flex flex-wrap gap-4">
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-[color:var(--sacred-tertiary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
                                     onClick={() => void exportAllAssets()}
                                 >
                                     导出素材
                                 </button>
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-[color:var(--sacred-tertiary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
                                     onClick={() => assetInputRef.current?.click()}
                                 >
                                     导入素材
                                 </button>
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
+                                    className="cursor-pointer text-sm font-medium text-[color:var(--sacred-tertiary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
                                     onClick={openCreate}
                                 >
                                     新增素材
@@ -269,7 +270,7 @@ export default function AssetsPage() {
                         ))}
                     </div>
 
-                    {!visibleAssets.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
+                    {!visibleAssets.length ? <AssetEmptyState hasAssets={Boolean(validAssets.length)} /> : null}
 
                     <div className="flex justify-center">
                         <Pagination
@@ -287,8 +288,30 @@ export default function AssetsPage() {
                 </div>
             </main>
 
-            <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
-                <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Modal
+                className="sacred-asset-editor-modal"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">{editingAsset ? "编辑素材" : "新增素材"}</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">整理文本、图片和封面信息，形成你的创作素材库</div>
+                    </div>
+                }
+                open={isAssetOpen}
+                width={980}
+                onCancel={() => setIsAssetOpen(false)}
+                destroyOnHidden
+                footer={
+                    <div className="sacred-asset-editor-actions">
+                        <Button autoInsertSpace={false} onClick={() => setIsAssetOpen(false)}>
+                            <span>取消</span>
+                        </Button>
+                        <Button autoInsertSpace={false} type="primary" onClick={() => void saveAsset()}>
+                            <span>保存</span>
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="sacred-asset-editor-grid grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
                         <Form.Item name="kind" label="类型">
                             <Select
@@ -327,7 +350,7 @@ export default function AssetsPage() {
                             </Form.Item>
                         ) : (
                             <Form.Item label="图片内容" required>
-                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+                                <div className="sacred-dropzone p-4">
                                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
                                         选择图片文件
                                     </Button>
@@ -344,13 +367,13 @@ export default function AssetsPage() {
                             </Form.Item>
                         )}
                     </Form>
-                    <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
+                    <div className="sacred-panel-soft p-4">
                         <Typography.Text strong>预览</Typography.Text>
-                        <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+                        <div className="mt-3 overflow-hidden rounded-lg border border-[color:var(--sacred-outline-variant)] bg-[rgba(30,32,31,0.34)]">
                             {coverUrl || imageDraft?.dataUrl ? (
                                 <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
                             ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
+                                <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm text-[color:var(--sacred-on-surface-variant)]">{content || "暂无封面"}</div>
                             )}
                             <div className="p-4">
                                 <Typography.Text strong ellipsis className="block">
@@ -395,10 +418,33 @@ export default function AssetsPage() {
 
             <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onCopy={copyAssetText} onDownload={downloadImage} />
 
-            <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
+                <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
 
-            <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
+            <Modal
+                className="sacred-asset-delete-modal"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">删除素材</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">该素材会从我的素材中移除</div>
+                    </div>
+                }
+                open={Boolean(deletingAsset)}
+                centered
+                onCancel={() => setDeletingAsset(null)}
+                footer={
+                    <div className="sacred-asset-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeletingAsset(null)}>
+                            <span>取消</span>
+                        </Button>
+                        <Button autoInsertSpace={false} danger type="primary" onClick={confirmDelete}>
+                            <span>删除</span>
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="sacred-asset-delete-body sacred-panel-soft">
+                    确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
+                </div>
             </Modal>
         </div>
     );
@@ -410,14 +456,14 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
     return (
         <Card
             hoverable
-            className="overflow-hidden"
+            className="sacred-gallery-card overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     {cover ? (
                         <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
                     ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
+                        <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
                 </button>
             }
@@ -426,7 +472,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
+                            <h2 className="line-clamp-1 text-sm font-semibold text-[color:var(--sacred-on-surface)]">{asset.title}</h2>
                             <Typography.Text type="secondary" className="mt-1 block text-xs">
                                 {asset.source || "未标注来源"}
                             </Typography.Text>
@@ -446,8 +492,8 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                     </div>
                 </div>
             </button>
-            <div className="flex items-center gap-2 px-4 pb-4">
-                <Button size="small" onClick={onOpen}>
+            <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
+                <Button autoInsertSpace={false} size="small" onClick={onOpen}>
                     查看
                 </Button>
                 {asset.kind !== "video" ? (
@@ -473,16 +519,37 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
     );
 }
 
+function AssetEmptyState({ hasAssets }: { hasAssets: boolean }) {
+    return (
+        <div className="sacred-empty-state flex min-h-64 flex-col items-center justify-center px-6 py-16 text-center">
+            <Upload className="mb-4 size-10 text-[color:var(--sacred-tertiary)]" />
+            <div className="text-sm font-medium text-[color:var(--sacred-on-surface)]">{hasAssets ? "没有找到素材" : "还没有素材"}</div>
+            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">{hasAssets ? "换一个关键词或类型继续查找。" : "新增或导入素材后，会在这里形成你的创作素材库。"}</div>
+        </div>
+    );
+}
+
 function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | null; onClose: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     return (
-        <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
+        <Drawer
+            className="sacred-asset-detail-drawer"
+            title={
+                <div>
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">素材详情</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">查看素材内容、标签和来源信息</div>
+                </div>
+            }
+            open={Boolean(asset)}
+            size="large"
+            onClose={onClose}
+        >
             {asset ? (
-                <div className="space-y-5">
+                <div className="sacred-asset-detail-body space-y-5 text-[color:var(--sacred-on-surface)]">
                     {cover ? (
                         <Image src={cover} alt={asset.title} className="rounded-lg" />
                     ) : (
-                        <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
+                        <div className="sacred-panel-soft p-5 text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
                     <div>
                         <Typography.Title level={4} className="!mb-2">
@@ -495,7 +562,7 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                             ))}
                         </Space>
                     </div>
-                    <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                    <div className="sacred-panel-soft p-4">
                         <Typography.Text type="secondary" className="block text-xs">
                             内容
                         </Typography.Text>
@@ -515,7 +582,7 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                             <Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph>
                         </div>
                     ) : null}
-                    <Space>
+                    <Space wrap>
                         {asset.kind === "text" ? (
                             <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
                                 复制文本

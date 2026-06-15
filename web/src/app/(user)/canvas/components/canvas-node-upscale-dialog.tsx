@@ -52,14 +52,26 @@ export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: {
     }, [image, sourceLongEdge]);
 
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={820} centered destroyOnHidden>
-            <div className="space-y-5">
+        <Modal
+            className="canvas-image-tool-modal"
+            title={
                 <div>
-                    <h2 className="text-xl font-semibold">图片放大</h2>
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">图片放大</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">选择目标像素和算法，生成更高分辨率版本</div>
                 </div>
+            }
+            open={open && Boolean(dataUrl)}
+            onCancel={onClose}
+            footer={null}
+            width={820}
+            centered
+            destroyOnHidden
+            styles={{ body: { maxHeight: "min(72vh, 680px)", overflowY: "auto" } }}
+        >
+            <div className="canvas-image-tool-shell space-y-5">
                 <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_360px]">
-                    <div className="rounded-xl border p-4">
-                        <div className="grid min-h-[280px] place-items-center rounded-lg bg-black/5">
+                    <div className="canvas-image-tool-preview sacred-panel-soft p-4">
+                        <div className="grid min-h-[280px] place-items-center rounded-lg bg-black/30">
                             <img src={dataUrl} alt="" className="max-h-[320px] max-w-full rounded-lg object-contain shadow-xl" draggable={false} />
                         </div>
                         <div className="mt-3 flex items-center justify-between text-sm">
@@ -67,7 +79,7 @@ export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: {
                             <span className="font-semibold">{image ? `${image.width} x ${image.height} px` : "读取中"}</span>
                         </div>
                     </div>
-                    <div className="space-y-6 py-2">
+                    <div className="canvas-image-tool-side space-y-6 py-2">
                         <div className="space-y-2">
                             <div className="font-medium opacity-75">目标像素</div>
                             <Segmented
@@ -95,7 +107,7 @@ export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: {
                                 onChange={(value) => setParams((current) => ({ ...current, algorithm: value as ImageUpscaleAlgorithm }))}
                             />
                         </div>
-                        <div className="rounded-xl border px-4 py-3 text-sm">
+                        <div className="sacred-panel-soft px-4 py-3 text-sm">
                             <div className="flex items-center justify-between">
                                 <span className="opacity-60">输出尺寸</span>
                                 <span className="font-semibold">{outputSize ? `${outputSize.width} x ${outputSize.height} px` : "未知"}</span>
@@ -103,7 +115,7 @@ export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: {
                         </div>
                     </div>
                 </div>
-                <div className="flex justify-end">
+                <div className="canvas-image-tool-actions flex justify-end">
                     <Button type="primary" size="large" icon={<ImagePlus className="size-4" />} disabled={!canUpscale} onClick={() => onConfirm(params)}>
                         生成放大图
                     </Button>

@@ -3,7 +3,7 @@
 import { Copy, FolderPlus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { App, Button, Card, Drawer, Empty, Image, Input, Pagination, Spin, Tag, Typography } from "antd";
+import { App, Button, Card, Drawer, Image, Input, Pagination, Spin, Tag, Typography } from "antd";
 import axios from "axios";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -87,12 +87,13 @@ export default function AssetLibraryPage() {
     }
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-800 dark:text-stone-100">
-            <main className="min-h-0 flex-1 overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.16)_1px,transparent_1px)]">
+        <div className="sacred-page-shell flex h-full flex-col overflow-hidden">
+            <main className="sacred-page-content min-h-0 flex-1 overflow-y-auto px-6 py-8">
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">素材库</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">挑选团队素材，加入我的素材后继续编辑和使用。</p>
+                        <div className="sacred-label">shared vault</div>
+                        <h1 className="sacred-title mt-3 text-4xl font-semibold">素材库</h1>
+                        <p className="mt-3 text-sm text-[color:var(--sacred-on-surface-variant)]">挑选团队素材，加入我的素材后继续编辑和使用。</p>
                     </div>
                     <div className="mx-auto mt-8 w-full max-w-2xl">
                         <Input
@@ -109,7 +110,7 @@ export default function AssetLibraryPage() {
                     </div>
                     <div className="mx-auto mt-6 max-w-6xl space-y-3">
                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">类型</div>
+                            <div className="pt-2 text-xs font-medium text-[color:var(--sacred-on-surface-variant)]">类型</div>
                             <div className="flex flex-wrap gap-2">
                                 {[
                                     { label: "全部", value: "" },
@@ -131,7 +132,7 @@ export default function AssetLibraryPage() {
                             </div>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">标签</div>
+                            <div className="pt-2 text-xs font-medium text-[color:var(--sacred-on-surface-variant)]">标签</div>
                             <div className="flex flex-wrap gap-2">
                                 <Tag.CheckableTag
                                     checked={selectedTags.length === 0}
@@ -168,7 +169,7 @@ export default function AssetLibraryPage() {
                         ))}
                     </div>
 
-                    {!items.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
+                    {!items.length ? <AssetEmptyState description="没有找到素材" /> : null}
 
                     <div className="flex justify-center">
                         <Pagination current={page} pageSize={PAGE_SIZE} total={total} showSizeChanger={false} onChange={(nextPage) => setPage(nextPage)} />
@@ -176,13 +177,24 @@ export default function AssetLibraryPage() {
                 </div>
             </main>
 
-            <Drawer title="素材详情" open={Boolean(selectedAsset)} size="large" onClose={() => setSelectedAsset(null)}>
+            <Drawer
+                className="sacred-asset-detail-drawer"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">素材详情</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">查看共享素材内容，并加入我的素材</div>
+                    </div>
+                }
+                open={Boolean(selectedAsset)}
+                size="large"
+                onClose={() => setSelectedAsset(null)}
+            >
                 {selectedAsset ? (
-                    <div className="space-y-5">
+                    <div className="sacred-asset-detail-body space-y-5 text-[color:var(--sacred-on-surface)]">
                         {selectedAsset.coverUrl ? (
                             <Image src={selectedAsset.coverUrl} alt={selectedAsset.title} className="rounded-lg" />
                         ) : (
-                            <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{selectedAsset.content || "暂无封面"}</div>
+                            <div className="sacred-panel-soft p-5 text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{selectedAsset.content || "暂无封面"}</div>
                         )}
                         <div>
                             <Typography.Title level={4} className="!mb-2">
@@ -195,11 +207,11 @@ export default function AssetLibraryPage() {
                                 ))}
                             </div>
                         </div>
-                        <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                        <div className="sacred-panel-soft p-4">
                             <Typography.Text type="secondary" className="block text-xs">
                                 内容
                             </Typography.Text>
-                            {selectedAsset.type === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{selectedAsset.content}</Typography.Paragraph> : <Typography.Text className="mt-2 block">{selectedAsset.url}</Typography.Text>}
+                            {selectedAsset.type === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap !text-[color:var(--sacred-on-surface)]">{selectedAsset.content}</Typography.Paragraph> : <Typography.Text className="mt-2 block break-all">{selectedAsset.url}</Typography.Text>}
                         </div>
                         {selectedAsset.description ? <Typography.Paragraph type="secondary">{selectedAsset.description}</Typography.Paragraph> : null}
                         <div className="flex flex-wrap gap-2">
@@ -229,14 +241,14 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
     return (
         <Card
             hoverable
-            className="overflow-hidden"
+            className="sacred-gallery-card overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     {cover ? (
                         <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
                     ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.content || "暂无封面"}</div>
+                        <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{asset.content || "暂无封面"}</div>
                     )}
                 </button>
             }
@@ -244,7 +256,7 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
+                        <h2 className="line-clamp-1 text-sm font-semibold text-[color:var(--sacred-on-surface)]">{asset.title}</h2>
                         <Tag className="m-0 shrink-0 text-[11px]">{asset.type === "image" ? "图片" : "文本"}</Tag>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
@@ -261,7 +273,7 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
                 </div>
             </button>
             <div className="flex items-center gap-2 px-4 pb-4">
-                <Button size="small" onClick={onOpen}>
+                <Button autoInsertSpace={false} size="small" onClick={onOpen}>
                     查看
                 </Button>
                 <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={onAdd}>
@@ -269,6 +281,16 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
                 </Button>
             </div>
         </Card>
+    );
+}
+
+function AssetEmptyState({ description }: { description: string }) {
+    return (
+        <div className="sacred-empty-state flex min-h-64 flex-col items-center justify-center px-6 py-16 text-center">
+            <FolderPlus className="mb-4 size-10 text-[color:var(--sacred-tertiary)]" />
+            <div className="text-sm font-medium text-[color:var(--sacred-on-surface)]">{description}</div>
+            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">调整关键词、类型或标签后再试。</div>
+        </div>
     );
 }
 

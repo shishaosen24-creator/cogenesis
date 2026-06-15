@@ -42,6 +42,7 @@ func New() *gin.Engine {
 		handler.AIVideoContent(c.Writer, c.Request, c.Param("id"))
 	})
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
+	api.POST("/prompts/sync", gin.WrapF(handler.SyncPrompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
 

@@ -14,8 +14,8 @@ export type CanvasImageMaskEditPayload = {
 type DrawMode = "paint" | "erase";
 
 const defaultBrushSize = 100;
-const maskFillColor = "rgba(37, 99, 235, .38)";
-const maskBorderColor = "rgba(255, 255, 255, .72)";
+const maskFillColor = "rgba(233, 193, 118, .34)";
+const maskBorderColor = "rgba(255, 241, 196, .78)";
 
 export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (payload: CanvasImageMaskEditPayload) => void }) {
     const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,7 +44,8 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
     const draw = (event: ReactPointerEvent<HTMLCanvasElement>) => {
         const point = readCanvasPoint(event.currentTarget, event.clientX, event.clientY);
         const maskCanvas = maskCanvasRef.current;
-        const context = maskCanvas?.getContext("2d");
+        if (!maskCanvas) return;
+        const context = maskCanvas.getContext("2d");
         if (!context) return;
         context.lineCap = "round";
         context.lineJoin = "round";
@@ -101,11 +102,26 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
     };
 
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={980} centered destroyOnHidden>
-            <div className="grid gap-5 lg:grid-cols-[minmax(360px,1fr)_320px]">
-                <div className="flex min-h-[360px] items-center justify-center rounded-xl border border-black/10 bg-transparent p-0 dark:border-white/10">
+        <Modal
+            className="canvas-image-tool-modal"
+            title={
+                <div>
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">局部遮罩编辑</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">涂抹需要修改的区域，再填写修改要求</div>
+                </div>
+            }
+            open={open && Boolean(dataUrl)}
+            onCancel={onClose}
+            footer={null}
+            width={980}
+            centered
+            destroyOnHidden
+            styles={{ body: { maxHeight: "min(72vh, 700px)", overflowY: "auto" } }}
+        >
+            <div className="canvas-image-tool-shell grid gap-5 lg:grid-cols-[minmax(360px,1fr)_320px]">
+                <div className="canvas-image-tool-preview sacred-panel-soft flex min-h-[360px] items-center justify-center p-2">
                     <div className="relative inline-block max-w-full overflow-hidden rounded-lg bg-transparent select-none">
-                        <img src={dataUrl} alt="" className="block max-h-[68vh] max-w-full bg-transparent" draggable={false} />
+                        <img src={dataUrl} alt="" className="block max-h-[62vh] max-w-full bg-transparent" draggable={false} />
                         {image ? (
                             <>
                                 <canvas ref={maskCanvasRef} width={image.width} height={image.height} className="hidden" />
@@ -124,10 +140,10 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                     </div>
                 </div>
 
-                <div className="flex min-h-[360px] flex-col gap-5">
-                    <div>
-                        <h2 className="text-xl font-semibold">局部遮罩编辑</h2>
-                        <div className="mt-2 text-sm opacity-60">{image ? `${image.width} x ${image.height}px` : "读取中"}</div>
+                <div className="canvas-image-tool-side flex min-h-[360px] flex-col gap-4">
+                    <div className="sacred-panel-soft p-3">
+                        <h2 className="sacred-title text-lg font-semibold">遮罩参数</h2>
+                        <div className="mt-2 text-sm text-[color:var(--sacred-on-surface-variant)]">{image ? `${image.width} x ${image.height}px` : "读取中"}</div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -139,7 +155,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                         </Button>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="sacred-panel-soft space-y-2 p-3">
                         <div className="flex items-center justify-between text-sm">
                             <span className="font-medium opacity-75">笔刷大小</span>
                             <span className="font-semibold">{brushSize}px</span>
@@ -147,7 +163,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                         <Slider min={8} max={160} step={2} value={brushSize} onChange={setBrushSize} />
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="sacred-panel-soft space-y-2 p-3">
                         <div className="text-sm font-medium opacity-75">修改要求</div>
                         <Input.TextArea
                             rows={6}
@@ -162,7 +178,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
                         {error ? <div className="text-xs font-medium text-[#ef4444]">{error}</div> : null}
                     </div>
 
-                    <div className="mt-auto flex items-center justify-between gap-2">
+                    <div className="canvas-image-tool-actions mt-auto flex items-center justify-between gap-2">
                         <Button icon={<RotateCcw className="size-4" />} onClick={resetMask}>
                             重置
                         </Button>

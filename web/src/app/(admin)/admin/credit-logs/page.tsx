@@ -2,7 +2,7 @@
 
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Space, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
@@ -77,13 +77,14 @@ export default function AdminCreditLogsPage() {
             key: "actions",
             width: 96,
             align: "right",
+            fixed: "right",
             render: (_, item) => (
                 <Space size={4}>
                     <Tooltip title="编辑">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingLog(item)} />
+                        <Button aria-label="编辑算力点日志" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EditOutlined />} onClick={() => setEditingLog(item)} />
                     </Tooltip>
                     <Tooltip title="删除">
-                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingLog(item)} />
+                        <Button aria-label="删除算力点日志" danger type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<DeleteOutlined />} onClick={() => setDeletingLog(item)} />
                     </Tooltip>
                 </Space>
             ),
@@ -92,8 +93,8 @@ export default function AdminCreditLogsPage() {
 
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                <Card variant="borderless">
+            <Flex vertical gap={16}>
+                <Card variant="borderless" className="sacred-panel-soft sacred-admin-filter-card">
                     <Form layout="vertical">
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
@@ -129,7 +130,8 @@ export default function AdminCreditLogsPage() {
                     search={false}
                     defaultSize="middle"
                     tableLayout="fixed"
-                    cardProps={{ variant: "borderless" }}
+                    scroll={{ x: 920 }}
+                    cardProps={{ variant: "borderless", className: "sacred-panel-soft" }}
                     headerTitle={
                         <Space>
                             <Typography.Text strong>算力点日志</Typography.Text>
@@ -152,69 +154,115 @@ export default function AdminCreditLogsPage() {
                         onChange: (nextPage, nextPageSize) => (nextPageSize !== pageSize ? changePageSize(nextPageSize) : changePage(nextPage)),
                     }}
                 />
-            </Space>
+            </Flex>
 
-            <Modal title={editingLog?.id ? "编辑日志" : "新增日志"} open={Boolean(editingLog)} width={680} onCancel={() => setEditingLog(null)} onOk={() => void saveLog()} okText="保存" cancelText="取消" destroyOnHidden>
-                <Form form={form} layout="vertical" requiredMark={false}>
-                    <Row gutter={14}>
-                        <Col span={12}>
-                            <Form.Item name="userId" label="用户 ID" rules={[{ required: true, message: "请输入用户 ID" }]}>
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="type" label="类型" rules={[{ required: true, message: "请输入类型" }]}>
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="amount" label="变动数量" rules={[{ required: true, message: "请输入变动数量" }]}>
-                                <InputNumber precision={0} style={{ width: "100%" }} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="balance" label="变动后余额" rules={[{ required: true, message: "请输入变动后余额" }]}>
-                                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="relatedId" label="关联 ID">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="createdAt" label="创建时间">
-                                <Input placeholder="不填则新增时自动生成" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                            <Form.Item name="remark" label="备注">
-                                <Input.TextArea rows={3} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                            <Form.Item name="extra" label="扩展信息">
-                                <Input.TextArea rows={3} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                </Form>
+            <Modal
+                className="sacred-admin-editor-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">CREDIT LEDGER</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            {editingLog?.id ? "编辑日志" : "新增日志"}
+                        </Typography.Title>
+                        <Typography.Text className="sacred-muted">算力点变动、余额和关联记录</Typography.Text>
+                    </Flex>
+                }
+                open={Boolean(editingLog)}
+                width={680}
+                onCancel={() => setEditingLog(null)}
+                footer={
+                    <div className="sacred-admin-editor-actions">
+                        <Button autoInsertSpace={false} onClick={() => setEditingLog(null)}>
+                            取消
+                        </Button>
+                        <Button type="primary" autoInsertSpace={false} onClick={() => void saveLog()}>
+                            保存
+                        </Button>
+                    </div>
+                }
+                destroyOnHidden
+            >
+                <div className="sacred-admin-editor-body">
+                    <Form form={form} layout="vertical" requiredMark={false}>
+                        <Row gutter={14}>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="userId" label="用户 ID" rules={[{ required: true, message: "请输入用户 ID" }]}>
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="type" label="类型" rules={[{ required: true, message: "请输入类型" }]}>
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="amount" label="变动数量" rules={[{ required: true, message: "请输入变动数量" }]}>
+                                    <InputNumber precision={0} style={{ width: "100%" }} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="balance" label="变动后余额" rules={[{ required: true, message: "请输入变动后余额" }]}>
+                                    <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="relatedId" label="关联 ID">
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="createdAt" label="创建时间">
+                                    <Input placeholder="不填则新增时自动生成" />
+                                </Form.Item>
+                            </Col>
+                            <Col span={24}>
+                                <Form.Item name="remark" label="备注">
+                                    <Input.TextArea rows={3} />
+                                </Form.Item>
+                            </Col>
+                            <Col span={24}>
+                                <Form.Item name="extra" label="扩展信息">
+                                    <Input.TextArea rows={3} />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </Form>
+                </div>
             </Modal>
 
             <Modal
-                title="删除日志"
+                className="sacred-admin-delete-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">DELETE LOG</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            删除日志
+                        </Typography.Title>
+                    </Flex>
+                }
                 open={Boolean(deletingLog)}
                 onCancel={() => setDeletingLog(null)}
-                onOk={async () => {
-                    if (!deletingLog) return;
-                    await deleteLog(deletingLog.id);
-                    setDeletingLog(null);
-                }}
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                cancelText="取消"
+                footer={
+                    <div className="sacred-admin-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeletingLog(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            danger
+                            type="primary"
+                            autoInsertSpace={false}
+                            onClick={async () => {
+                                if (!deletingLog) return;
+                                await deleteLog(deletingLog.id);
+                                setDeletingLog(null);
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </div>
+                }
             >
-                确定删除这条算力点日志吗？
+                <div className="sacred-admin-delete-body">确定删除这条算力点日志吗？</div>
             </Modal>
         </main>
     );

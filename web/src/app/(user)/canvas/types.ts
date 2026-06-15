@@ -56,6 +56,15 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    director?: {
+        workflowId: string;
+        stepId?: string;
+        role: "input" | "step" | "output" | "note";
+        mode?: CanvasGenerationMode;
+        dependencyStepIds?: string[];
+        plannedOrder?: number;
+        runState?: "planned" | "ready" | "running" | "done" | "error";
+    };
 };
 
 export type CanvasNodeData = {
@@ -93,11 +102,16 @@ export type CanvasAssistantImage = {
 export type CanvasAssistantMessage = {
     id: string;
     role: "user" | "assistant";
-    mode: "ask" | "image";
+    mode: "ask" | "image" | "director";
     text: string;
     isLoading?: boolean;
+    isExecuting?: boolean;
     references?: CanvasAssistantReference[];
+    referencePack?: import("./director/types").DirectorReferencePackItem[];
     images?: CanvasAssistantImage[];
+    directorWorkflow?: import("./director/types").DirectorWorkflow;
+    directorMaterialization?: import("./director/types").DirectorWorkflowMaterialization;
+    directorRunReport?: import("./director/types").DirectorWorkflowRunReport;
 };
 
 export type CanvasAssistantSession = {

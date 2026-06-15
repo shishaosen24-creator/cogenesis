@@ -4,7 +4,7 @@ import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../types";
-import { getGenerationResourceNodes } from "../utils/canvas-resource-references";
+import { getGenerationResourceEntries } from "../utils/canvas-resource-references";
 
 export type NodeGenerationContext = {
     prompt: string;
@@ -19,6 +19,7 @@ export type NodeGenerationContext = {
 
 export type NodeGenerationInput = {
     nodeId: string;
+    sourceNodeId?: string;
     type: "text" | "image" | "video" | "audio";
     title: string;
     text?: string;
@@ -55,8 +56,16 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
 }
 
 function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string): NodeGenerationContext {
-    const inputByNodeId = new Map(inputs.map((input) => [input.nodeId, input]));
+    const inputsByTokenId = new Map<string, NodeGenerationInput[]>();
+    inputs.forEach((input) => {
+        [input.nodeId, input.sourceNodeId].filter((id): id is string => Boolean(id)).forEach((id) => {
+            const group = inputsByTokenId.get(id) || [];
+            group.push(input);
+            inputsByTokenId.set(id, group);
+        });
+    });
     const selectedInputs: NodeGenerationInput[] = [];
+    const selectedNodeIds = new Set<string>();
     const labelByNodeId = new Map<string, string>();
     const textBlocks: string[] = [];
     const counts = { image: 0, video: 0, audio: 0, text: 0 };
@@ -68,17 +77,20 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         if (match.index === undefined) continue;
         hasToken = true;
         nextPrompt += prompt.slice(lastIndex, match.index);
-        const input = inputByNodeId.get(match[1]);
-        if (input) {
+        const matchedInputs = inputsByTokenId.get(match[1]) || [];
+        const labels: string[] = [];
+        matchedInputs.forEach((input) => {
             let label = labelByNodeId.get(input.nodeId);
             if (!label) {
                 label = generationLabel(input.type, counts[input.type]++);
                 labelByNodeId.set(input.nodeId, label);
                 if (input.type === "text") textBlocks.push(`【${label}】\n${input.text || ""}`);
-                else selectedInputs.push(input);
+                else if (!selectedNodeIds.has(input.nodeId)) selectedInputs.push(input);
+                selectedNodeIds.add(input.nodeId);
             }
-            nextPrompt += input.type === "text" ? `【${label}】` : label;
-        }
+            labels.push(input.type === "text" ? `【${label}】` : label);
+        });
+        nextPrompt += labels.join("、");
         lastIndex = match.index + match[0].length;
     }
 
@@ -114,15 +126,15 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
 }
 
 export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
-    return getGenerationResourceNodes(nodeId, nodes, connections).flatMap((node): NodeGenerationInput[] => {
+    return getGenerationResourceEntries(nodeId, nodes, connections).flatMap(({ node, sourceNodeId }): NodeGenerationInput[] => {
         const image = readReferenceImage(node);
-        if (image) return [{ nodeId: node.id, type: "image" as const, title: node.title, image }];
+        if (image) return [{ nodeId: node.id, sourceNodeId, type: "image" as const, title: node.title, image }];
         const video = readReferenceVideo(node);
-        if (video) return [{ nodeId: node.id, type: "video" as const, title: node.title, video }];
+        if (video) return [{ nodeId: node.id, sourceNodeId, type: "video" as const, title: node.title, video }];
         const audio = readReferenceAudio(node);
-        if (audio) return [{ nodeId: node.id, type: "audio" as const, title: node.title, audio }];
+        if (audio) return [{ nodeId: node.id, sourceNodeId, type: "audio" as const, title: node.title, audio }];
         const text = readNodeTextInput(node);
-        if (text) return [{ nodeId: node.id, type: "text" as const, title: node.title, text }];
+        if (text) return [{ nodeId: node.id, sourceNodeId, type: "text" as const, title: node.title, text }];
         return [];
     });
 }

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, SlidersHorizontal, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { App, Button, Checkbox, Drawer, Empty, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
+import { App, Button, Checkbox, Drawer, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
 import localforage from "localforage";
 import { saveAs } from "file-saver";
 
@@ -143,7 +143,7 @@ export default function ImagePage() {
             message.error("请输入生图提示词");
             return;
         }
-        if (!isAiConfigReady(effectiveConfig, model)) {
+        if (!isAiConfigReady(effectiveConfig, model, "image")) {
             message.warning("请先完成配置");
             openConfigDialog(true);
             return;
@@ -274,7 +274,7 @@ export default function ImagePage() {
             message.error("请输入生图提示词");
             return null;
         }
-        if (!isAiConfigReady(effectiveConfig, model)) {
+        if (!isAiConfigReady(effectiveConfig, model, "image")) {
             message.warning("请先完成配置");
             openConfigDialog(true);
             return null;
@@ -307,9 +307,9 @@ export default function ImagePage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-            <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
-                <aside className="thin-scrollbar hidden min-h-0 overflow-y-auto rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:block">
+        <div className="sacred-workbench flex h-full flex-col overflow-hidden">
+            <main className="sacred-page-content grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
+                <aside className="portal-glass thin-scrollbar hidden min-h-0 overflow-y-auto p-4 lg:block">
                     <LogPanel
                         logs={logs}
                         selectedLogIds={selectedLogIds}
@@ -322,11 +322,12 @@ export default function ImagePage() {
                 </aside>
 
                 <section className="grid gap-3 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[420px_minmax(0,1fr)]">
-                    <div className="thin-scrollbar flex flex-col rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:min-h-0 lg:overflow-y-auto">
+                    <div className="portal-glass thin-scrollbar flex flex-col p-4 lg:min-h-0 lg:overflow-y-auto">
                         <div>
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <h1 className="text-2xl font-semibold text-stone-950 dark:text-stone-100">生图工作台</h1>
+                                    <div className="sacred-label">image altar</div>
+                                    <h1 className="sacred-title mt-2 text-3xl font-semibold">生图工作台</h1>
                                 </div>
                                 <div className="flex shrink-0 gap-2 lg:hidden">
                                     <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
@@ -368,7 +369,7 @@ export default function ImagePage() {
                                     </div>
                                 </div>
                                 <div
-                                    className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-stone-300 p-2 pb-3 overscroll-x-contain dark:border-stone-700"
+                                    className="sacred-dropzone hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden p-2 pb-3 overscroll-x-contain"
                                     onWheel={(event) => {
                                         if (event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) return;
                                         event.preventDefault();
@@ -376,7 +377,7 @@ export default function ImagePage() {
                                     }}
                                 >
                                     {references.map((item, index) => (
-                                        <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-stone-200 dark:border-stone-800">
+                                        <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-[color:var(--sacred-outline-variant)]">
                                             <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
                                             <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">{imageReferenceLabel(index)}</span>
                                             <ReferenceOrderButtons index={index} total={references.length} onMove={(offset) => setReferences((value) => moveListItem(value, index, offset))} />
@@ -390,12 +391,12 @@ export default function ImagePage() {
                                             </button>
                                         </div>
                                     ))}
-                                    {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-stone-500">暂无参考图</div> : null}
+                                    {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无参考图</div> : null}
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
-                                <span className="truncate text-stone-500 dark:text-stone-400">
+                            <div className="sacred-panel-soft flex items-center justify-between px-3 py-2 text-sm sm:hidden">
+                                <span className="truncate text-[color:var(--sacred-on-surface-variant)]">
                                     {model} · {effectiveConfig.size} · {effectiveConfig.quality}
                                 </span>
                                 <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
@@ -415,10 +416,11 @@ export default function ImagePage() {
                         </div>
                     </div>
 
-                    <div className="thin-scrollbar rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                    <div className="portal-glass thin-scrollbar p-4 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <div>
-                                <h2 className="text-xl font-semibold">生成结果</h2>
+                                <div className="sacred-label">gallery</div>
+                                <h2 className="sacred-title mt-2 text-2xl font-semibold">生成结果</h2>
                             </div>
                             {running ? <Tag className="m-0 px-2 py-1">等待 {formatDuration(elapsedMs)}</Tag> : null}
                         </div>
@@ -435,9 +437,10 @@ export default function ImagePage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center dark:border-stone-700 lg:min-h-[560px]">
-                                <ImagePlus className="mb-4 size-11 text-stone-400" />
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有生成图片" />
+                            <div className="sacred-empty-state flex min-h-[320px] flex-col items-center justify-center text-center lg:min-h-[560px]">
+                                <ImagePlus className="mb-4 size-11 text-[color:var(--sacred-tertiary)]" />
+                                <div className="text-sm font-medium text-[color:var(--sacred-on-surface)]">还没有生成图片</div>
+                                <div className="mt-2 max-w-sm px-6 text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">输入提示词并开始生成，结果会在这里形成暗色画廊。</div>
                             </div>
                         )}
                     </div>
@@ -454,7 +457,19 @@ export default function ImagePage() {
                     event.target.value = "";
                 }}
             />
-            <Drawer title="生成记录" placement="bottom" size="large" open={logsOpen} onClose={() => setLogsOpen(false)}>
+            <Drawer
+                className="sacred-workbench-drawer sacred-workbench-log-drawer"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">生成记录</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">查看、预览和管理图片生成批次</div>
+                    </div>
+                }
+                placement="bottom"
+                size="large"
+                open={logsOpen}
+                onClose={() => setLogsOpen(false)}
+            >
                 <LogPanel
                     logs={logs}
                     selectedLogIds={selectedLogIds}
@@ -465,15 +480,50 @@ export default function ImagePage() {
                     onPreviewLog={(log) => void previewGenerationLog(log)}
                 />
             </Drawer>
-            <Drawer title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
-                <div className="grid grid-cols-2 gap-3 pb-4">
+            <Drawer
+                className="sacred-workbench-drawer sacred-workbench-settings-drawer"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">参数</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">调整本次图片生成配置</div>
+                    </div>
+                }
+                placement="bottom"
+                size="82vh"
+                open={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+            >
+                <div className="sacred-workbench-settings-grid grid gap-3 pb-4 sm:grid-cols-2">
                     <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
                 </div>
             </Drawer>
             <PromptSelectDialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
             <AssetPickerModal open={assetPickerOpen} defaultTab="my-assets" onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
-            <Modal title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除选中的 {selectedLogIds.length} 条生成记录吗？
+            <Modal
+                className="sacred-workbench-delete-modal"
+                title={
+                    <div>
+                        <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">删除生成记录</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">该操作只移除选中的历史记录</div>
+                    </div>
+                }
+                open={deleteConfirmOpen}
+                centered
+                onCancel={() => setDeleteConfirmOpen(false)}
+                footer={
+                    <div className="sacred-workbench-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeleteConfirmOpen(false)}>
+                            <span>取消</span>
+                        </Button>
+                        <Button autoInsertSpace={false} danger type="primary" onClick={deleteSelectedLogs}>
+                            <span>删除</span>
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="sacred-workbench-delete-body sacred-panel-soft">
+                    确定删除选中的 {selectedLogIds.length} 条生成记录吗？
+                </div>
             </Modal>
         </div>
     );
@@ -484,11 +534,11 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
 
     return (
         <>
-            <label className="col-span-2 block min-w-0 sm:col-span-1">
+            <label className="block min-w-0 sm:col-span-1">
                 <span className="mb-1.5 block text-sm font-semibold sm:mb-2 sm:text-base">模型</span>
                 <ModelPicker config={config} value={model} onChange={(value) => updateConfig("imageModel", value)} capability="image" fullWidth onMissingConfig={() => openConfigDialog(false)} />
             </label>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
                 <ImageSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className="space-y-4" maxCount={10} />
             </div>
         </>
@@ -509,10 +559,10 @@ function ResultImageCard({
     onSaveAsset: (image: GeneratedImage, index: number) => void;
 }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+        <div className="sacred-gallery-card">
             <Image src={image.dataUrl} alt={`生成结果 ${index + 1}`} className="aspect-square object-cover" />
-            <div className="space-y-2 border-t border-stone-200 px-3 py-2.5 dark:border-stone-800">
-                <div className="flex min-w-0 gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
+            <div className="space-y-2 border-t border-[color:var(--sacred-outline-variant)] px-3 py-2.5">
+                <div className="flex min-w-0 gap-x-2 gap-y-1 text-xs text-[color:var(--sacred-on-surface-variant)]">
                     <span>
                         {image.width}x{image.height}
                     </span>
@@ -543,7 +593,7 @@ function ResultImageCard({
 
 function PendingImageCard() {
     return (
-        <div className="relative aspect-square overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
+        <div className="sacred-empty-state relative aspect-square overflow-hidden">
             <div
                 className="absolute inset-0 opacity-60"
                 style={{
@@ -551,7 +601,7 @@ function PendingImageCard() {
                     backgroundSize: "16px 16px",
                 }}
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-[color:var(--sacred-on-surface-variant)]">
                 <LoaderCircle className="size-6 animate-spin" />
                 <span>生成中</span>
             </div>
@@ -561,14 +611,14 @@ function PendingImageCard() {
 
 function FailedImageCard({ error, onRetry }: { error: string; onRetry: () => void }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-red-200 bg-red-50 dark:border-red-950 dark:bg-red-950/20">
+        <div className="overflow-hidden rounded-lg border border-red-500/40 bg-red-950/20">
             <div className="flex aspect-square flex-col items-center justify-center gap-3 p-5 text-center">
                 <div className="text-sm font-medium text-red-600 dark:text-red-300">生成失败</div>
                 <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-xs !text-red-500 dark:!text-red-300">
                     {error}
                 </Typography.Paragraph>
             </div>
-            <div className="flex justify-end border-t border-red-200 p-3 dark:border-red-950">
+            <div className="flex justify-end border-t border-red-500/30 p-3">
                 <Button size="small" danger onClick={onRetry}>
                     重试
                 </Button>
@@ -602,14 +652,15 @@ function LogPanel({
     const toggleAll = () => onSelectedLogIdsChange(allSelected ? [] : logs.map((log) => log.id));
 
     return (
-        <>
+        <div className="sacred-workbench-log-panel">
             <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-base font-semibold">生成记录</h2>
+                    <div className="sacred-label">history</div>
+                    <h2 className="sacred-title mt-1 text-base font-semibold">生成记录</h2>
                 </div>
                 <Tag className="m-0">{logs.length}</Tag>
             </div>
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="sacred-workbench-log-actions mb-4 flex flex-wrap gap-2">
                 <Button size="small" icon={<Plus className="size-3.5" />} onClick={onCreateSession}>
                     新建
                 </Button>
@@ -631,9 +682,9 @@ function LogPanel({
                         onClick={() => onPreviewLog(log)}
                     />
                 ))}
-                {!logs.length ? <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-stone-300 text-center text-sm text-stone-500 dark:border-stone-700">暂无生成记录</div> : null}
+                {!logs.length ? <div className="sacred-empty-state flex min-h-48 items-center justify-center text-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无生成记录</div> : null}
             </div>
-        </>
+        </div>
     );
 }
 
@@ -643,7 +694,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
     return (
         <button
             type="button"
-            className={`block w-full rounded-lg border p-2 text-left transition ${active ? "border-stone-900 bg-blue-50 dark:border-stone-100 dark:bg-blue-950/20" : "border-stone-200 bg-background hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900"}`}
+            className={`block w-full rounded-lg border p-2 text-left transition ${active ? "border-[rgba(233,193,118,0.72)] bg-[rgba(233,193,118,0.12)] shadow-[0_0_16px_rgba(197,160,89,0.16)]" : "border-[color:var(--sacred-outline-variant)] bg-[rgba(30,32,31,0.34)] hover:border-[rgba(233,193,118,0.42)] hover:bg-[rgba(233,193,118,0.08)]"}`}
             onClick={onClick}
         >
             <div className="grid grid-cols-[minmax(128px,1fr)_auto] gap-2">
@@ -766,8 +817,8 @@ function ReferenceOrderButtons({ index, total, onMove }: { index: number; total:
     if (total <= 1) return null;
     return (
         <div className="absolute inset-x-1 bottom-1 flex justify-between">
-            <Button size="small" className="!h-6 !w-6 !min-w-6 !rounded-full !bg-white/85 !p-0 !shadow-sm" icon={<ArrowLeft className="size-3" />} disabled={index <= 0} onClick={() => onMove(-1)} />
-            <Button size="small" className="!h-6 !w-6 !min-w-6 !rounded-full !bg-white/85 !p-0 !shadow-sm" icon={<ArrowRight className="size-3" />} disabled={index >= total - 1} onClick={() => onMove(1)} />
+            <Button size="small" className="!h-6 !w-6 !min-w-6 !rounded-full !border-[rgba(233,193,118,0.5)] !bg-[rgba(18,20,19,0.72)] !p-0 !text-[color:var(--sacred-tertiary-bright)] !shadow-[0_0_12px_rgba(197,160,89,0.18)] backdrop-blur" icon={<ArrowLeft className="size-3" />} disabled={index <= 0} onClick={() => onMove(-1)} />
+            <Button size="small" className="!h-6 !w-6 !min-w-6 !rounded-full !border-[rgba(233,193,118,0.5)] !bg-[rgba(18,20,19,0.72)] !p-0 !text-[color:var(--sacred-tertiary-bright)] !shadow-[0_0_12px_rgba(197,160,89,0.18)] backdrop-blur" icon={<ArrowRight className="size-3" />} disabled={index >= total - 1} onClick={() => onMove(1)} />
         </div>
     );
 }

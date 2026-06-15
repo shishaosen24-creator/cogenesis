@@ -1,7 +1,7 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Progress, Segmented, Select } from "antd";
-import { Cloud, RefreshCw, Wifi } from "lucide-react";
+import { CheckCircle2, Cloud, RefreshCw, Wifi, XCircle } from "lucide-react";
 import { useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -15,6 +15,9 @@ type ModelGroup = {
     capability: ModelCapability;
     modelKey: "imageModel" | "videoModel" | "textModel" | "audioModel";
     modelsKey: "imageModels" | "videoModels" | "textModels" | "audioModels";
+    baseUrlKey: "imageBaseUrl" | "videoBaseUrl" | "textBaseUrl" | "audioBaseUrl";
+    apiKeyKey: "imageApiKey" | "videoApiKey" | "textApiKey" | "audioApiKey";
+    connectionLabel: string;
     defaultLabel: string;
     optionsLabel: string;
 };
@@ -27,11 +30,17 @@ type WebdavDomainProgress = {
     status?: "active" | "success" | "exception";
 };
 
+type ModelFetchState = {
+    loading: boolean;
+    message: string;
+    status?: "success" | "error";
+};
+
 const modelGroups: ModelGroup[] = [
-    { capability: "image", modelKey: "imageModel", modelsKey: "imageModels", defaultLabel: "默认生图模型", optionsLabel: "生图模型可选项" },
-    { capability: "video", modelKey: "videoModel", modelsKey: "videoModels", defaultLabel: "默认视频模型", optionsLabel: "视频模型可选项" },
-    { capability: "text", modelKey: "textModel", modelsKey: "textModels", defaultLabel: "默认文本模型", optionsLabel: "文本模型可选项" },
-    { capability: "audio", modelKey: "audioModel", modelsKey: "audioModels", defaultLabel: "默认音频模型", optionsLabel: "音频模型可选项" },
+    { capability: "image", modelKey: "imageModel", modelsKey: "imageModels", baseUrlKey: "imageBaseUrl", apiKeyKey: "imageApiKey", connectionLabel: "图像", defaultLabel: "默认生图模型", optionsLabel: "生图模型可选项" },
+    { capability: "video", modelKey: "videoModel", modelsKey: "videoModels", baseUrlKey: "videoBaseUrl", apiKeyKey: "videoApiKey", connectionLabel: "视频", defaultLabel: "默认视频模型", optionsLabel: "视频模型可选项" },
+    { capability: "text", modelKey: "textModel", modelsKey: "textModels", baseUrlKey: "textBaseUrl", apiKeyKey: "textApiKey", connectionLabel: "文本", defaultLabel: "默认文本模型", optionsLabel: "文本模型可选项" },
+    { capability: "audio", modelKey: "audioModel", modelsKey: "audioModels", baseUrlKey: "audioBaseUrl", apiKeyKey: "audioApiKey", connectionLabel: "音频", defaultLabel: "默认音频模型", optionsLabel: "音频模型可选项" },
 ];
 
 const webdavDomainKeys: AppSyncDomainKey[] = ["canvas", "assets", "image-workbench", "video-workbench"];
@@ -55,6 +64,12 @@ function createWebdavDomainProgress(): Record<AppSyncDomainKey, WebdavDomainProg
 export function AppConfigModal() {
     const { message } = App.useApp();
     const [loadingModels, setLoadingModels] = useState(false);
+    const [modelFetchState, setModelFetchState] = useState<Record<ModelCapability, ModelFetchState>>({
+        image: { loading: false, message: "" },
+        video: { loading: false, message: "" },
+        text: { loading: false, message: "" },
+        audio: { loading: false, message: "" },
+    });
     const [testingWebdav, setTestingWebdav] = useState(false);
     const [syncingWebdav, setSyncingWebdav] = useState(false);
     const [webdavSyncStatus, setWebdavSyncStatus] = useState("");
@@ -73,14 +88,11 @@ export function AppConfigModal() {
     const allowCustomChannel = modelChannel?.allowCustomChannel === true;
     const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
     const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
-    const modelOptions = config.models.map((model) => ({ label: model, value: model }));
     const webdavReady = Boolean(webdav.url.trim());
 
     const finishConfig = () => {
-        setConfigDialogOpen(false);
-        if (effectiveMode === "local" && (!config.baseUrl.trim() || !config.apiKey.trim())) return;
-        if (!modelConfig.imageModel.trim() || !modelConfig.videoModel.trim() || !modelConfig.textModel.trim()) return;
         if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
+        setConfigDialogOpen(false);
         message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
         clearPromptContinue();
     };
@@ -114,6 +126,47 @@ export function AppConfigModal() {
             message.success("模型列表已更新");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取模型失败");
+        } finally {
+            setLoadingModels(false);
+        }
+    };
+
+    const refreshCapabilityModels = async (group: ModelGroup, options?: { silent?: boolean }) => {
+        if (effectiveMode === "remote") return [] as string[];
+        setModelFetchState((current) => ({ ...current, [group.capability]: { loading: true, message: "正在拉取模型..." } }));
+        try {
+            const models = await fetchImageModels(config, group.capability);
+            const latestConfig = useConfigStore.getState().config;
+            const nextGlobalModels = uniqueModels([...latestConfig.models, ...models]);
+            const nextModels = uniqueModels([...latestConfig[group.modelsKey], ...models]);
+            updateConfig("models", nextGlobalModels);
+            updateConfig(group.modelsKey, nextModels);
+            if (nextModels.length && !nextModels.includes(latestConfig[group.modelKey])) updateConfig(group.modelKey, nextModels[0]);
+            setModelFetchState((current) => ({
+                ...current,
+                [group.capability]: { loading: false, status: "success", message: `已拉取 ${models.length} 个模型，已归入 ${nextModels.length} 个可选模型` },
+            }));
+            if (!options?.silent) message.success(`${group.connectionLabel}模型已更新`);
+            return models;
+        } catch (error) {
+            const text = error instanceof Error ? error.message : "读取模型失败";
+            setModelFetchState((current) => ({ ...current, [group.capability]: { loading: false, status: "error", message: text } }));
+            if (!options?.silent) message.error(`${group.connectionLabel}模型拉取失败：${text}`);
+            return [] as string[];
+        }
+    };
+
+    const refreshAllCapabilityModels = async () => {
+        if (effectiveMode === "remote") return;
+        setLoadingModels(true);
+        try {
+            const results = await Promise.all(modelGroups.map((group) => refreshCapabilityModels(group, { silent: true })));
+            const successCount = results.filter((models) => models.length).length;
+            if (successCount) {
+                message.success(`已完成 ${successCount}/${modelGroups.length} 类模型拉取`);
+            } else {
+                message.error("没有成功拉取到模型，请检查各类型 Base URL 和 API Key");
+            }
         } finally {
             setLoadingModels(false);
         }
@@ -178,10 +231,12 @@ export function AppConfigModal() {
 
     return (
         <Modal
+            className="sacred-config-modal"
             title={
-                <div>
-                    <div className="text-lg font-semibold">配置与用户偏好</div>
-                    <div className="mt-1 text-xs font-normal text-stone-500">模型、渠道和画布默认行为</div>
+                <div className="min-w-0">
+                    <div className="sacred-label">USER CONFIGURATION</div>
+                    <div className="sacred-title mt-1 text-xl font-semibold">配置与用户偏好</div>
+                    <div className="sacred-muted mt-1 text-xs font-normal">模型、渠道和画布默认行为</div>
                 </div>
             }
             open={isConfigOpen}
@@ -190,12 +245,14 @@ export function AppConfigModal() {
             onCancel={() => setConfigDialogOpen(false)}
             styles={{ body: { maxHeight: "72vh", overflowY: "auto", paddingRight: 18 } }}
             footer={
-                <Button type="primary" onClick={finishConfig}>
-                    完成
-                </Button>
+                <div className="sacred-config-actions">
+                    <Button type="primary" autoInsertSpace={false} onClick={finishConfig}>
+                        完成
+                    </Button>
+                </div>
             }
         >
-            <div className="pt-1">
+            <div className="sacred-config-body pt-1">
                 <Form layout="vertical" requiredMark={false}>
                     {allowCustomChannel ? (
                         <Form.Item label="渠道模式" className="mb-5">
@@ -214,50 +271,96 @@ export function AppConfigModal() {
                     {effectiveMode === "local" ? (
                         <>
                             <div className="grid gap-4 md:grid-cols-2">
-                                <Form.Item label="Base URL" className="mb-4">
-                                    <Input value={config.baseUrl} onChange={(event) => updateConfig("baseUrl", event.target.value)} />
+                                <Form.Item label="通用 Base URL（兜底，可留空）" extra="图像、视频、文本或音频专属配置留空时，会沿用这里。" className="mb-4">
+                                    <Input value={config.baseUrl} placeholder="https://api.openai.com" onChange={(event) => updateConfig("baseUrl", event.target.value)} />
                                 </Form.Item>
-                                <Form.Item label="API Key" className="mb-4">
-                                    <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
+                                <Form.Item label="通用 API Key（兜底，可留空）" extra="可先留空，真正发起请求时再按所用类型检查。" className="mb-4">
+                                    <Input.Password value={config.apiKey} placeholder="sk-..." onChange={(event) => updateConfig("apiKey", event.target.value)} />
                                 </Form.Item>
                             </div>
-                            <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2 dark:border-stone-800">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium">模型列表</div>
-                                    <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型</div>
+                            <section className="sacred-config-section mb-5">
+                                <div className="mb-3">
+                                    <div className="sacred-config-section-title">按类型单独配置</div>
+                                    <div className="sacred-muted mt-1 text-xs">图像、视频、文本、音频都可单独填写 Base URL 和 API Key；留空时自动沿用通用兜底。</div>
                                 </div>
-                                <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
-                                    拉取模型列表
-                                </Button>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    {modelGroups.map((group) => {
+                                        const fetchState = modelFetchState[group.capability];
+                                        return (
+                                            <div key={group.capability} className="sacred-config-type-card">
+                                                <div className="mb-3 flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <div className="text-sm font-semibold">{group.connectionLabel}</div>
+                                                        <div className="sacred-muted mt-0.5 text-xs">已保存 {config[group.modelsKey].length} 个模型</div>
+                                                    </div>
+                                                    <Button size="small" loading={fetchState.loading} onClick={() => void refreshCapabilityModels(group)}>
+                                                        拉取模型
+                                                    </Button>
+                                                </div>
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                    <Form.Item label={`${group.connectionLabel} Base URL`} className="mb-0">
+                                                        <Input value={config[group.baseUrlKey]} placeholder="留空沿用通用 Base URL" onChange={(event) => updateConfig(group.baseUrlKey, event.target.value)} />
+                                                    </Form.Item>
+                                                    <Form.Item label={`${group.connectionLabel} API Key`} className="mb-0">
+                                                        <Input.Password value={config[group.apiKeyKey]} placeholder="留空沿用通用 API Key" onChange={(event) => updateConfig(group.apiKeyKey, event.target.value)} />
+                                                    </Form.Item>
+                                                </div>
+                                                {fetchState.message ? (
+                                                    <div className={`sacred-model-fetch-state mt-3 ${fetchState.status === "error" ? "is-error" : fetchState.status === "success" ? "is-success" : ""}`}>
+                                                        {fetchState.status === "error" ? <XCircle className="size-3.5" /> : fetchState.status === "success" ? <CheckCircle2 className="size-3.5" /> : <RefreshCw className="size-3.5 animate-spin" />}
+                                                        <span>{fetchState.message}</span>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                            <div className="sacred-config-inline-panel mb-5">
+                                <div className="min-w-0">
+                                    <div className="text-sm font-semibold">拉取所有可使用模型</div>
+                                    <div className="sacred-muted mt-1 text-xs">会分别使用图像、视频、文本、音频自己的 Base URL 和 API Key；成功后进入对应下拉。</div>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                                    <Button size="small" loading={loadingModels} onClick={() => void refreshAllCapabilityModels()}>
+                                        拉取全部类型模型
+                                    </Button>
+                                    <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
+                                        只拉取通用模型
+                                    </Button>
+                                </div>
                             </div>
                         </>
                     ) : (
-                        <div className="mb-5 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
-                            <div className="font-medium text-stone-900 dark:text-stone-100">云端渠道</div>
+                        <div className="sacred-config-section mb-5 text-sm">
+                            <div className="font-semibold">云端渠道</div>
                             <div className="mt-1">由系统后台渠道转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。</div>
                         </div>
                     )}
                     {effectiveMode === "local" ? (
-                        <section className="mb-5 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                        <section className="sacred-config-section mb-5">
                             <div className="mb-3">
-                                <div className="text-sm font-semibold">本地模型可选项</div>
-                                <div className="mt-1 text-xs text-stone-500">从已拉取模型中选择哪些模型可进入各类下拉。</div>
+                                <div className="sacred-config-section-title">本地模型可选项</div>
+                                <div className="sacred-muted mt-1 text-xs">每类下拉使用该类型已拉取的模型池；如分类不准，可在这里手动增删。</div>
                             </div>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {modelGroups.map((group) => (
-                                    <Form.Item key={group.modelsKey} label={group.optionsLabel} className="mb-0">
-                                        <Select
-                                            mode="multiple"
-                                            showSearch
-                                            allowClear
-                                            maxTagCount="responsive"
-                                            placeholder={config.models.length ? `请选择${group.optionsLabel}` : "请先拉取模型列表"}
-                                            value={config[group.modelsKey]}
-                                            options={modelOptions}
-                                            onChange={(models) => updateCapabilityModels(group, models)}
-                                        />
-                                    </Form.Item>
-                                ))}
+                                {modelGroups.map((group) => {
+                                    const options = uniqueModels([...config[group.modelsKey], ...filterModelsByCapability(config.models, group.capability)]).map((model) => ({ label: model, value: model }));
+                                    return (
+                                        <Form.Item key={group.modelsKey} label={`${group.optionsLabel}（${config[group.modelsKey].length}）`} className="mb-0">
+                                            <Select
+                                                mode="multiple"
+                                                showSearch
+                                                allowClear
+                                                maxTagCount="responsive"
+                                                placeholder={options.length ? `请选择${group.optionsLabel}` : `请先拉取${group.connectionLabel}模型`}
+                                                value={config[group.modelsKey]}
+                                                options={options}
+                                                onChange={(models) => updateCapabilityModels(group, models)}
+                                            />
+                                        </Form.Item>
+                                    );
+                                })}
                             </div>
                         </section>
                     ) : null}
@@ -305,16 +408,16 @@ export function AppConfigModal() {
                             <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
                         </Form.Item>
                     ) : null}
-                    <section className="mt-5 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                    <section className="sacred-config-section mt-5">
                         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                             <div>
-                                <div className="flex items-center gap-2 text-sm font-semibold">
+                                <div className="sacred-config-section-title flex items-center gap-2">
                                     <Cloud className="size-4" />
                                     WebDAV 同步
                                 </div>
-                                <div className="mt-1 text-xs text-stone-500">同步画布、我的素材、生成记录和本地媒体文件，不包含 AI API Key；服务不支持 CORS 时可走 Next.js 转发。</div>
+                                <div className="sacred-muted mt-1 text-xs">同步画布、我的素材、生成记录和本地媒体文件，不包含 AI API Key；服务不支持 CORS 时可走 Next.js 转发。</div>
                             </div>
-                            <div className="text-xs text-stone-500">{webdav.lastSyncedAt ? `上次同步 ${formatWebdavTime(webdav.lastSyncedAt)}` : "尚未同步"}</div>
+                            <div className="sacred-muted text-xs">{webdav.lastSyncedAt ? `上次同步 ${formatWebdavTime(webdav.lastSyncedAt)}` : "尚未同步"}</div>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <Form.Item label="连接方式" className="mb-4 md:col-span-2">
@@ -348,7 +451,7 @@ export function AppConfigModal() {
                             <Button type="primary" icon={<RefreshCw className="size-4" />} disabled={!webdavReady || testingWebdav} loading={syncingWebdav} onClick={() => void syncWebdav()}>
                                 {syncingWebdav ? "同步中" : "立即同步"}
                             </Button>
-                            {webdavSyncStatus ? <span className="text-xs text-stone-500">{webdavSyncStatus}</span> : null}
+                            {webdavSyncStatus ? <span className="sacred-muted text-xs">{webdavSyncStatus}</span> : null}
                         </div>
                         {syncingWebdav || webdavSyncStatus ? (
                             <div className="mt-3 grid gap-2">
@@ -356,10 +459,10 @@ export function AppConfigModal() {
                                     const item = webdavDomainProgress[key];
                                     const count = item.total ? `${item.current || 0}/${item.total}` : "";
                                     return (
-                                        <div key={key} className="rounded-md border border-stone-200 px-3 py-2 dark:border-stone-800">
+                                        <div key={key} className="sacred-config-progress-card">
                                             <div className="mb-1 flex min-w-0 items-center justify-between gap-3 text-xs">
-                                                <span className="shrink-0 font-medium text-stone-700 dark:text-stone-200">{item.label}</span>
-                                                <span className="min-w-0 truncate text-right text-stone-500">
+                                                <span className="shrink-0 font-semibold">{item.label}</span>
+                                                <span className="sacred-muted min-w-0 truncate text-right">
                                                     {item.stage}
                                                     {count ? ` · ${count}` : ""}
                                                 </span>
@@ -384,7 +487,7 @@ function normalizeImageCount(value: string) {
 function resolveNextCapabilityModels(current: string[], suggested: string[], allModels: string[]) {
     const available = new Set(allModels);
     const kept = uniqueModels(current).filter((model) => available.has(model));
-    return kept.length ? kept : suggested;
+    return uniqueModels([...kept, ...suggested]);
 }
 
 function uniqueModels(models: string[]) {

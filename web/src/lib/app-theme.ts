@@ -2,30 +2,42 @@ import type { CSSProperties } from "react";
 import type { ThemeConfig } from "antd";
 import { theme as antdTheme } from "antd";
 
-const neutral = {
+const sacred = {
     light: {
-        primary: "#171717",
-        primaryHover: "#000000",
-        primaryText: "#ffffff",
-        menuBg: "#f5f5f5",
-        menuText: "#171717",
-        selectActiveBg: "#f5f5f5",
-        selectSelectedBg: "#f0f0f0",
-        selectText: "#171717",
-        tableSelectedBg: "rgba(17, 17, 17, 0.05)",
-        tableSelectedHoverBg: "rgba(17, 17, 17, 0.08)",
+        primary: "#8b651d",
+        primaryHover: "#6f5016",
+        primaryText: "#fffaf0",
+        bgLayout: "#f6f3ec",
+        bgContainer: "#fffcf5",
+        bgElevated: "#fffcf5",
+        text: "#26231d",
+        textSecondary: "#615d54",
+        border: "#d1c5ad",
+        menuBg: "rgba(255, 252, 245, 0.82)",
+        menuText: "#26231d",
+        selectActiveBg: "rgba(233, 193, 118, 0.14)",
+        selectSelectedBg: "rgba(233, 193, 118, 0.22)",
+        selectText: "#26231d",
+        tableSelectedBg: "rgba(139, 101, 29, 0.08)",
+        tableSelectedHoverBg: "rgba(139, 101, 29, 0.12)",
     },
     dark: {
-        primary: "#fafafa",
-        primaryHover: "#ffffff",
-        primaryText: "#171717",
-        menuBg: "#262626",
-        menuText: "#fafafa",
-        selectActiveBg: "#262626",
-        selectSelectedBg: "#333333",
-        selectText: "#fafafa",
-        tableSelectedBg: "rgba(255, 255, 255, 0.08)",
-        tableSelectedHoverBg: "rgba(255, 255, 255, 0.12)",
+        primary: "#e9c176",
+        primaryHover: "#ffdea5",
+        primaryText: "#261900",
+        bgLayout: "#121413",
+        bgContainer: "#1e201f",
+        bgElevated: "#292a29",
+        text: "#e3e2e0",
+        textSecondary: "#c4c7c7",
+        border: "rgba(142, 145, 146, 0.32)",
+        menuBg: "rgba(233, 193, 118, 0.12)",
+        menuText: "#ffdea5",
+        selectActiveBg: "rgba(233, 193, 118, 0.12)",
+        selectSelectedBg: "rgba(233, 193, 118, 0.18)",
+        selectText: "#e3e2e0",
+        tableSelectedBg: "rgba(233, 193, 118, 0.1)",
+        tableSelectedHoverBg: "rgba(233, 193, 118, 0.14)",
     },
 };
 
@@ -38,7 +50,7 @@ export const adminLayoutStyle = {
 };
 
 export function getAntThemeConfig(dark: boolean): ThemeConfig {
-    const color = dark ? neutral.dark : neutral.light;
+    const color = dark ? sacred.dark : sacred.light;
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
@@ -50,24 +62,50 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorLinkHover: color.primaryHover,
             colorLinkActive: color.primary,
             colorTextLightSolid: color.primaryText,
+            colorBgLayout: color.bgLayout,
+            colorBgContainer: color.bgContainer,
+            colorBgElevated: color.bgElevated,
+            colorText: color.text,
+            colorTextSecondary: color.textSecondary,
+            colorBorder: color.border,
+            colorBorderSecondary: color.border,
+            borderRadius: 8,
+            borderRadiusLG: 8,
+            borderRadiusSM: 4,
         },
         components: {
             Button: {
                 primaryShadow: "none",
+                borderRadius: 8,
+            },
+            Drawer: {
+                colorBgElevated: color.bgElevated,
+            },
+            Modal: {
+                contentBg: color.bgElevated,
+                headerBg: color.bgElevated,
             },
             Menu: {
                 itemActiveBg: color.menuBg,
                 itemHoverBg: color.menuBg,
                 itemSelectedBg: color.menuBg,
                 itemSelectedColor: color.menuText,
-                darkItemHoverBg: neutral.dark.menuBg,
-                darkItemSelectedBg: neutral.dark.menuBg,
-                darkItemSelectedColor: neutral.dark.menuText,
+                darkItemHoverBg: sacred.dark.menuBg,
+                darkItemSelectedBg: sacred.dark.menuBg,
+                darkItemSelectedColor: sacred.dark.menuText,
             },
             Select: {
                 optionActiveBg: color.selectActiveBg,
                 optionSelectedBg: color.selectSelectedBg,
                 optionSelectedColor: color.selectText,
+            },
+            Segmented: {
+                itemSelectedBg: color.selectSelectedBg,
+                itemSelectedColor: color.selectText,
+            },
+            Input: {
+                activeBorderColor: color.primary,
+                hoverBorderColor: color.primary,
             },
             Table: {
                 rowSelectedBg: color.tableSelectedBg,

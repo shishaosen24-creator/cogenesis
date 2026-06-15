@@ -101,13 +101,14 @@ export default function AdminUsersPage() {
             key: "actions",
             width: 96,
             align: "right",
+            fixed: "right",
             render: (_, item) => (
                 <Space size={4}>
                     <Tooltip title="编辑">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingUser(item)} />
+                        <Button aria-label="编辑用户" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EditOutlined />} onClick={() => setEditingUser(item)} />
                     </Tooltip>
                     <Tooltip title="删除">
-                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingUser(item)} />
+                        <Button aria-label="删除用户" danger type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<DeleteOutlined />} onClick={() => setDeletingUser(item)} />
                     </Tooltip>
                 </Space>
             ),
@@ -117,7 +118,7 @@ export default function AdminUsersPage() {
     return (
         <main style={{ padding: 24 }}>
             <Flex vertical gap={16}>
-                <Card variant="borderless">
+                <Card variant="borderless" className="sacred-panel-soft sacred-admin-filter-card">
                     <Form layout="vertical">
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
@@ -160,7 +161,8 @@ export default function AdminUsersPage() {
                     search={false}
                     defaultSize="middle"
                     tableLayout="fixed"
-                    cardProps={{ variant: "borderless" }}
+                    scroll={{ x: 980 }}
+                    cardProps={{ variant: "borderless", className: "sacred-panel-soft" }}
                     headerTitle={
                         <Space>
                             <Typography.Text strong>用户列表</Typography.Text>
@@ -185,76 +187,128 @@ export default function AdminUsersPage() {
                 />
             </Flex>
 
-            <Modal title={editingUser?.id ? "编辑用户" : "新增用户"} open={Boolean(editingUser)} width={680} onCancel={() => setEditingUser(null)} onOk={() => void saveUser()} okText="保存" cancelText="取消" destroyOnHidden>
-                <Form form={form} layout="vertical" requiredMark={false}>
-                    <Typography.Text strong>基础信息</Typography.Text>
-                    <Row gutter={14}>
-                        <Col span={12}>
-                            <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="password" label={editingUser?.id ? "新密码" : "密码"} rules={editingUser?.id ? [] : [{ required: true, message: "请输入密码" }]}>
-                                <Input.Password autoComplete="new-password" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="displayName" label="昵称">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="email" label="邮箱">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="role" label="角色" rules={[{ required: true, message: "请选择角色" }]}>
-                                <Select options={roleOptions} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="status" label="状态" rules={[{ required: true, message: "请选择状态" }]}>
-                                <Select options={statusOptions} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    {editingUser?.id ? (
-                        <>
-                            <Divider style={{ margin: "4px 0 16px" }} />
-                            <Typography.Text strong>算力点调整</Typography.Text>
-                            <Row gutter={14}>
-                                <Col span={12}>
-                                    <Form.Item label="算力点">
-                                        <Space.Compact style={{ width: "100%" }}>
-                                            <Form.Item name="credits" noStyle>
-                                                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
-                                            </Form.Item>
-                                            <Button onClick={() => void saveCredits()}>调整</Button>
-                                        </Space.Compact>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                        </>
-                    ) : null}
-                </Form>
+            <Modal
+                className="sacred-admin-editor-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">USER ACCESS</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            {editingUser?.id ? "编辑用户" : "新增用户"}
+                        </Typography.Title>
+                        <Typography.Text className="sacred-muted">账号身份、状态与算力点信息</Typography.Text>
+                    </Flex>
+                }
+                open={Boolean(editingUser)}
+                width={680}
+                onCancel={() => setEditingUser(null)}
+                footer={
+                    <div className="sacred-admin-editor-actions">
+                        <Button autoInsertSpace={false} onClick={() => setEditingUser(null)}>
+                            取消
+                        </Button>
+                        <Button type="primary" autoInsertSpace={false} onClick={() => void saveUser()}>
+                            保存
+                        </Button>
+                    </div>
+                }
+                destroyOnHidden
+            >
+                <div className="sacred-admin-editor-body">
+                    <Form form={form} layout="vertical" requiredMark={false}>
+                        <Typography.Text strong className="sacred-admin-section-title">
+                            基础信息
+                        </Typography.Text>
+                        <Row gutter={14}>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="password" label={editingUser?.id ? "新密码" : "密码"} rules={editingUser?.id ? [] : [{ required: true, message: "请输入密码" }]}>
+                                    <Input.Password autoComplete="new-password" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="displayName" label="昵称">
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="email" label="邮箱">
+                                    <Input />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="role" label="角色" rules={[{ required: true, message: "请选择角色" }]}>
+                                    <Select options={roleOptions} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <Form.Item name="status" label="状态" rules={[{ required: true, message: "请选择状态" }]}>
+                                    <Select options={statusOptions} />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                        {editingUser?.id ? (
+                            <>
+                                <Divider style={{ margin: "4px 0 16px" }} />
+                                <Typography.Text strong className="sacred-admin-section-title">
+                                    算力点调整
+                                </Typography.Text>
+                                <Row gutter={14}>
+                                    <Col xs={24} md={12}>
+                                        <Form.Item label="算力点">
+                                            <Space.Compact style={{ width: "100%" }}>
+                                                <Form.Item name="credits" noStyle>
+                                                    <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+                                                </Form.Item>
+                                                <Button autoInsertSpace={false} onClick={() => void saveCredits()}>
+                                                    调整
+                                                </Button>
+                                            </Space.Compact>
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            </>
+                        ) : null}
+                    </Form>
+                </div>
             </Modal>
 
             <Modal
-                title="删除用户"
+                className="sacred-admin-delete-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">DELETE USER</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            删除用户
+                        </Typography.Title>
+                    </Flex>
+                }
                 open={Boolean(deletingUser)}
                 onCancel={() => setDeletingUser(null)}
-                onOk={async () => {
-                    if (!deletingUser) return;
-                    await deleteUser(deletingUser.id);
-                    setDeletingUser(null);
-                }}
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                cancelText="取消"
+                footer={
+                    <div className="sacred-admin-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeletingUser(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            danger
+                            type="primary"
+                            autoInsertSpace={false}
+                            onClick={async () => {
+                                if (!deletingUser) return;
+                                await deleteUser(deletingUser.id);
+                                setDeletingUser(null);
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </div>
+                }
             >
-                确定删除「{deletingUser?.displayName || deletingUser?.username}」吗？删除后该账号将无法继续登录。
+                <div className="sacred-admin-delete-body">确定删除「{deletingUser?.displayName || deletingUser?.username}」吗？删除后该账号将无法继续登录。</div>
             </Modal>
         </main>
     );

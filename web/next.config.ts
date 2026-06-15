@@ -16,6 +16,11 @@ export default function nextConfig(phase: string): NextConfig {
     return {
         output: "standalone",
         allowedDevOrigins: isDev ? ["*.*.*.*"] : [],
+        devIndicators: false,
+        onDemandEntries: {
+            maxInactiveAge: 60 * 60 * 1000,
+            pagesBufferLength: 12,
+        },
         typescript: {
             ignoreBuildErrors: true,
         },

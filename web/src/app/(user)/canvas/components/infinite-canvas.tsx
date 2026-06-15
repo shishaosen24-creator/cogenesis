@@ -178,9 +178,10 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             onDragOver={(event) => event.preventDefault()}
             onDrop={onDrop}
         >
+            <div className="pointer-events-none absolute inset-0" style={{ background: theme.canvas.veil }} />
             <CanvasGrid viewport={viewport} mode={backgroundMode} />
             <div
-                className="absolute origin-top-left"
+                className="absolute left-0 top-0 origin-top-left"
                 style={{
                     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.k})`,
                 }}

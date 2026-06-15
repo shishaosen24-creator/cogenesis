@@ -4,7 +4,7 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildSeedancePromptText, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildCapabilityApiUrl, getCapabilityEndpoint, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -25,18 +25,19 @@ export type VideoGenerationTask = { id: string; provider: "openai" | "seedance";
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 function aiApiUrl(config: AiConfig, path: string) {
-    return config.channelMode === "remote" ? `/api/v1${path}` : buildApiUrl(config.baseUrl, path);
+    return buildCapabilityApiUrl(config, "video", path);
 }
 
 function aiHeaders(config: AiConfig, contentType?: string) {
     const token = useUserStore.getState().token;
+    const endpoint = getCapabilityEndpoint(config, "video");
     return config.channelMode === "remote"
         ? {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
               ...(contentType ? { "Content-Type": contentType } : {}),
           }
         : {
-              Authorization: `Bearer ${config.apiKey}`,
+              Authorization: `Bearer ${endpoint.apiKey}`,
               ...(contentType ? { "Content-Type": contentType } : {}),
           };
 }
@@ -183,7 +184,7 @@ function assertSeedanceAudioReferences(audioReferences: ReferenceAudio[]) {
 
 function seedanceApiUrl(config: AiConfig, taskId?: string) {
     if (config.channelMode === "remote") return taskId ? `/api/v1/videos/${encodeURIComponent(taskId)}` : "/api/v1/videos";
-    return buildApiUrl(config.baseUrl, `/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`);
+    return buildCapabilityApiUrl(config, "video", `/contents/generations/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`);
 }
 
 async function buildSeedanceContent(config: AiConfig, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[]) {
@@ -255,9 +256,10 @@ async function videoResultFromUrl(url: string): Promise<VideoGenerationResult> {
 }
 
 function assertVideoConfig(config: AiConfig, model: string) {
+    const endpoint = getCapabilityEndpoint(config, "video");
     if (!model) throw new Error("请先配置视频模型");
-    if (config.channelMode === "local" && !config.baseUrl.trim()) throw new Error("请先配置 Base URL");
-    if (config.channelMode === "local" && !config.apiKey.trim()) throw new Error("请先配置 API Key");
+    if (config.channelMode === "local" && !endpoint.baseUrl.trim()) throw new Error("请先配置视频 Base URL 或通用 Base URL");
+    if (config.channelMode === "local" && !endpoint.apiKey.trim()) throw new Error("请先配置视频 API Key 或通用 API Key");
 }
 
 function normalizeVideoSeconds(value: string) {

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, History, ImageIcon, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
-import { Button, Modal, Tooltip } from "antd";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, Film, History, ImageIcon, LoaderCircle, MessageSquare, Mic2, PanelRightClose, Paperclip, Play, Plus, RotateCcw, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
+import { Button, Modal, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
@@ -22,10 +22,14 @@ import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
+import { DIRECTOR_REFERENCE_ROLE_OPTIONS, createDirectorReferencePackItemFromNode, directorReferencePackToLegacyReferences } from "../director/reference-pack";
+import { buildDirectorPlannerPrompt, createFallbackDirectorWorkflow, formatDirectorWorkflowText, parseDirectorWorkflow } from "../director/workflow-planner";
+import type { DirectorReferencePackItem, DirectorReferenceRole, DirectorWorkflow, DirectorWorkflowMaterialization, DirectorWorkflowReference, DirectorWorkflowRunReport } from "../director/types";
 
-type AssistantMode = "ask" | "image";
+type AssistantMode = "ask" | "image" | "director";
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
+type AssistantTaskState = Record<string, true>;
 
 type CanvasAssistantPanelProps = {
     nodes: CanvasNodeData[];
@@ -36,12 +40,15 @@ type CanvasAssistantPanelProps = {
     onSessionsChange: (sessions: CanvasAssistantSession[], activeSessionId: string | null) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
+    onApplyDirectorWorkflow: (workflow: DirectorWorkflow) => Promise<DirectorWorkflowMaterialization>;
+    onExecuteDirectorWorkflow: (materialization: DirectorWorkflowMaterialization) => Promise<DirectorWorkflowRunReport>;
     onPasteImage: (file: File) => void;
+    onAttachReferenceFile: (file: File, role: DirectorReferenceRole) => Promise<DirectorReferencePackItem | null>;
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onPasteImage, onAttachReferenceFile, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -53,14 +60,16 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const [view, setView] = useState<"chat" | "history">("chat");
     const [mode, setMode] = useState<AssistantMode>("image");
     const [prompt, setPrompt] = useState("");
-    const [isRunning, setIsRunning] = useState(false);
+    const [runningTasks, setRunningTasks] = useState<AssistantTaskState>({});
     const [checkedChatIds, setCheckedChatIds] = useState<string[]>([]);
     const [deleteChatIds, setDeleteChatIds] = useState<string[]>([]);
     const [closing, setClosing] = useState(false);
     const [resizing, setResizing] = useState(false);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
+    const [referencePack, setReferencePack] = useState<DirectorReferencePackItem[]>([]);
     const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
     const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
+    const executingDirectorMessageIdsRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         if (!sessions.length) return;
@@ -80,8 +89,11 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
+    const selectedReferencePack = useMemo(() => buildSelectedReferencePack(nodes, selectedNodeIds, removedReferenceIds), [nodes, selectedNodeIds, removedReferenceIds]);
+    const activeReferencePack = useMemo(() => mergeReferencePackItems([...selectedReferencePack, ...referencePack]), [referencePack, selectedReferencePack]);
     const assistantConfig = useMemo(() => ({ ...effectiveConfig, count: effectiveConfig.canvasImageCount || effectiveConfig.count }), [effectiveConfig]);
     const iconButtonStyle = { color: theme.node.muted };
+    const hasRunningTasks = Object.keys(runningTasks).length > 0;
 
     useEffect(() => {
         setRemovedReferenceIds(new Set());
@@ -106,6 +118,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             messages: session.messages.map((message) => (message.id === messageId ? { ...message, ...patch } : message)),
             updatedAt: new Date().toISOString(),
         }));
+    };
+
+    const markTaskRunning = (taskId: string, running: boolean) => {
+        setRunningTasks((current) => {
+            if (running) return { ...current, [taskId]: true };
+            const { [taskId]: _done, ...rest } = current;
+            return rest;
+        });
     };
 
     const startChatSession = () => {
@@ -140,9 +160,10 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         cleanupImages({ sessions: [session] });
     };
 
-    const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
+    const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[], savedReferencePack?: DirectorReferencePackItem[]) => {
         const requestConfig = { ...effectiveConfig, count: nextMode === "image" ? effectiveConfig.canvasImageCount || effectiveConfig.count : effectiveConfig.count, model: nextMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
-        if (!isAiConfigReady(requestConfig, requestConfig.model)) {
+        const canUseAi = isAiConfigReady(requestConfig, requestConfig.model, nextMode === "image" ? "image" : "text");
+        if (!canUseAi && nextMode !== "director") {
             openConfigDialog(true);
             return;
         }
@@ -154,14 +175,41 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         }
 
         const refs = savedReferences || selectedReferences;
-        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: nextMode, text, references: refs };
+        const pack = savedReferencePack || activeReferencePack;
+        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: nextMode, text, references: refs, referencePack: pack };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
-        appendMessage(session.id, { id: assistantId, role: "assistant", mode: nextMode, text: nextMode === "image" ? "正在生成图片" : "正在回答", isLoading: true });
+        appendMessage(session.id, { id: assistantId, role: "assistant", mode: nextMode, text: nextMode === "image" ? "正在生成图片" : nextMode === "director" ? "正在生成导演工作流" : "正在回答", isLoading: true });
         setPrompt("");
-        setIsRunning(true);
+        markTaskRunning(assistantId, true);
 
         try {
+            if (nextMode === "director") {
+                const directorReferences = pack.length ? directorReferencePackToLegacyReferences(pack) : refs.map(referenceToDirectorReference);
+                const previousWorkflow = findLastDirectorWorkflow(history);
+                let rawWorkflow = "";
+                let plannerError = "";
+                if (canUseAi) {
+                    try {
+                        rawWorkflow = await requestImageQuestion(requestConfig, await buildDirectorPlannerMessages({ prompt: text, references: directorReferences, referencePack: pack, previousWorkflow }), () => {
+                            updateMessage(session.id, assistantId, { text: "正在拆解创意、规划节点与依赖关系...", isLoading: true });
+                        });
+                    } catch (error) {
+                        plannerError = error instanceof Error ? error.message : "文本模型规划失败";
+                    }
+                }
+                const workflow = rawWorkflow ? parseDirectorWorkflow(rawWorkflow, { prompt: text, references: directorReferences, referencePack: pack }) : createFallbackDirectorWorkflow({ prompt: text, references: directorReferences, referencePack: pack });
+                const materialization = await onApplyDirectorWorkflow(workflow);
+                const workflowText = formatDirectorWorkflowText(workflow, materialization);
+                updateMessage(session.id, assistantId, {
+                    text: plannerError ? `${workflowText}\n\n文本模型规划失败，已自动切换本地导演策略：${plannerError}` : workflowText,
+                    directorWorkflow: workflow,
+                    directorMaterialization: materialization,
+                    isLoading: false,
+                });
+                return;
+            }
+
             if (nextMode === "image") {
                 const referenceImages: ReferenceImage[] = await Promise.all(
                     refs.filter((item) => item.dataUrl).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey })),
@@ -183,21 +231,46 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         } catch (error) {
             updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "操作失败", isLoading: false });
         } finally {
-            setIsRunning(false);
+            markTaskRunning(assistantId, false);
         }
     };
 
     const submit = async () => {
         const text = prompt.trim();
-        if (!text || isRunning) return;
-        await sendMessage(text, mode, messages);
+        if (!text) return;
+        void sendMessage(text, mode, messages);
     };
 
     const retryMessage = (message: CanvasAssistantMessage) => {
         const index = messages.findIndex((item) => item.id === message.id);
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
-        if (user) void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
+        if (user) void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references, user.referencePack);
+    };
+
+    const executeDirectorMessage = async (message: CanvasAssistantMessage) => {
+        if (!message.directorWorkflow) return;
+        const sessionId = activeSession?.id;
+        if (!sessionId) return;
+        if (executingDirectorMessageIdsRef.current.has(message.id)) return;
+        executingDirectorMessageIdsRef.current.add(message.id);
+        markTaskRunning(message.id, true);
+        updateMessage(sessionId, message.id, { isExecuting: true });
+        try {
+            const materialization = message.directorMaterialization || (await onApplyDirectorWorkflow(message.directorWorkflow));
+            updateMessage(sessionId, message.id, { directorMaterialization: materialization });
+            const report = await onExecuteDirectorWorkflow(materialization);
+            updateMessage(sessionId, message.id, {
+                text: formatDirectorWorkflowText(message.directorWorkflow, materialization, report),
+                directorRunReport: report,
+                isExecuting: false,
+            });
+        } catch (error) {
+            updateMessage(sessionId, message.id, { text: error instanceof Error ? error.message : "工作流执行失败", isExecuting: false });
+        } finally {
+            executingDirectorMessageIdsRef.current.delete(message.id);
+            markTaskRunning(message.id, false);
+        }
     };
 
     const startResize = () => {
@@ -241,7 +314,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                     <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="size-4" />
-                        {view === "history" ? "历史记录" : "画布助手(未开发)"}
+                        {view === "history" ? "历史记录" : "画布助手"}
                     </div>
                     <div className="flex items-center gap-1">
                         {view === "history" ? (
@@ -302,14 +375,14 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                             onDelete={(id) => setDeleteChatIds([id])}
                         />
                     ) : messages.length ? (
-                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} />
+                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onExecuteDirectorWorkflow={executeDirectorMessage} />
                     ) : (
                         <div className="flex h-full flex-col items-center justify-center px-1 text-center">
                             <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
-                                <span>Infinite Canvas</span>
-                                <DiaTextReveal className="absolute inset-0" colors={["#A97CF8", "#F38CB8", "#FDCC92"]} textColor="transparent" duration={1.8} startOnView={false} text="Infinite Canvas" />
+                                <span>共生画布</span>
+                                <DiaTextReveal className="absolute inset-0" colors={["#e9c176", "#fff1c4", "#a98f51"]} textColor="transparent" duration={1.8} startOnView={false} text="共生画布" />
                             </div>
-                            <div className="mt-3 font-serif text-base italic tracking-wide opacity-60">One canvas, infinite ideas</div>
+                            <div className="mt-3 font-serif text-base italic opacity-60">人与 AI 彼此创世，彼此成就。</div>
                         </div>
                     )}
                 </div>
@@ -318,8 +391,9 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                     <AssistantComposer
                         mode={mode}
                         prompt={prompt}
-                        isRunning={isRunning}
+                        isRunning={hasRunningTasks}
                         references={selectedReferences}
+                        referencePack={activeReferencePack}
                         config={assistantConfig}
                         onModeChange={setMode}
                         onPromptChange={setPrompt}
@@ -328,9 +402,23 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         onMissingConfig={() => openConfigDialog(true)}
                         onRemoveReference={(id) => {
                             setRemovedReferenceIds((prev) => new Set(prev).add(id));
+                            setReferencePack((prev) => prev.filter((item) => item.nodeId !== id));
                             if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
                         }}
                         onPasteImage={onPasteImage}
+                        onAttachReferenceFile={onAttachReferenceFile}
+                        onReferenceRoleChange={(id, role) => {
+                            setReferencePack((prev) => {
+                                const hasItem = prev.some((item) => item.id === id || item.nodeId === id);
+                                if (hasItem) return prev.map((item) => (item.id === id || item.nodeId === id ? { ...item, role } : item));
+                                const selectedItem = activeReferencePack.find((item) => item.id === id || item.nodeId === id);
+                                return selectedItem ? mergeReferencePackItems([...prev, { ...selectedItem, role }]) : prev;
+                            });
+                        }}
+                        onAddReferencePackItem={(item) => {
+                            setReferencePack((prev) => mergeReferencePackItems([...prev, item]));
+                            onSelectNodeIds(new Set([...Array.from(selectedNodeIds), item.nodeId]));
+                        }}
                         modelCosts={modelCosts}
                     />
                 ) : null}
@@ -368,6 +456,7 @@ function AssistantComposer({
     prompt,
     isRunning,
     references,
+    referencePack,
     config,
     onModeChange,
     onPromptChange,
@@ -376,12 +465,16 @@ function AssistantComposer({
     onMissingConfig,
     onRemoveReference,
     onPasteImage,
+    onAttachReferenceFile,
+    onReferenceRoleChange,
+    onAddReferencePackItem,
     modelCosts,
 }: {
     mode: AssistantMode;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
+    referencePack: DirectorReferencePackItem[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
     onPromptChange: (prompt: string) => void;
@@ -390,14 +483,38 @@ function AssistantComposer({
     onMissingConfig: () => void;
     onRemoveReference: (id: string) => void;
     onPasteImage: (file: File) => void;
+    onAttachReferenceFile: (file: File, role: DirectorReferenceRole) => Promise<DirectorReferencePackItem | null>;
+    onReferenceRoleChange: (id: string, role: DirectorReferenceRole) => void;
+    onAddReferencePackItem: (item: DirectorReferencePackItem) => void;
     modelCosts?: { model: string; credits: number }[];
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [attachRole, setAttachRole] = useState<DirectorReferenceRole>("product");
+    const [attaching, setAttaching] = useState(false);
     const activeModel = mode === "image" ? config.imageModel || config.model : config.textModel || config.model;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: activeModel, count: mode === "image" ? config.count : 1 });
 
     return (
         <div className="px-2 pb-2" onWheelCapture={(event) => event.stopPropagation()}>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"
+                className="hidden"
+                onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    setAttaching(true);
+                    try {
+                        const item = await onAttachReferenceFile(file, attachRole);
+                        if (item) onAddReferencePackItem({ ...item, role: attachRole });
+                    } finally {
+                        setAttaching(false);
+                    }
+                }}
+            />
             {references.length ? (
                 <div className="thin-scrollbar mb-1.5 flex max-w-full gap-1.5 overflow-x-auto px-1 pb-1">
                     {references.map((item, index) => (
@@ -405,7 +522,23 @@ function AssistantComposer({
                     ))}
                 </div>
             ) : null}
-            <div className="rounded-[28px] border px-3 pb-3 pt-3 shadow-lg" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}>
+            <div className="rounded-lg border px-3 pb-3 pt-3 shadow-lg" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}>
+                {referencePack.length ? (
+                    <div className="mb-2 rounded-lg border px-2 py-2" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+                        <div className="mb-1.5 flex items-center justify-between gap-2 text-xs" style={{ color: theme.node.muted }}>
+                            <span className="inline-flex items-center gap-1">
+                                <Paperclip className="size-3.5" />
+                                客户素材包
+                            </span>
+                            <span>{referencePack.length} 个</span>
+                        </div>
+                        <div className="thin-scrollbar flex max-h-24 flex-col gap-1.5 overflow-y-auto pr-1">
+                            {referencePack.map((item) => (
+                                <DirectorReferencePackChip key={item.id} item={item} theme={theme} onRoleChange={(role) => onReferenceRoleChange(item.id, role)} onRemove={() => onRemoveReference(item.nodeId)} />
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
                 <textarea
                     value={prompt}
                     onChange={(event) => onPromptChange(event.target.value)}
@@ -422,11 +555,22 @@ function AssistantComposer({
                     }}
                     className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:text-stone-400"
                     style={{ color: theme.node.text }}
-                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : "输入你想问的问题"}
+                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : mode === "director" ? "描述剧本、广告、短片或创意目标，导演会自动搭建工作流" : "输入你想问的问题"}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
                         <CanvasPromptLibrary onSelect={onPromptChange} />
+                        <Tooltip title="添加客户素材">
+                            <Button type="text" loading={attaching} className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Paperclip className="size-4" />} onClick={() => fileInputRef.current?.click()} />
+                        </Tooltip>
+                        <Select
+                            size="small"
+                            value={attachRole}
+                            className="canvas-reference-role-select min-w-[92px]"
+                            popupMatchSelectWidth={140}
+                            options={DIRECTOR_REFERENCE_ROLE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                            onChange={setAttachRole}
+                        />
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
                             <>
@@ -440,16 +584,17 @@ function AssistantComposer({
                     <Button
                         type="primary"
                         className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3"
-                        disabled={isRunning || !prompt.trim()}
+                        disabled={!prompt.trim()}
                         onClick={() => void onSubmit()}
                         aria-label="发送"
+                        title={isRunning ? "已有任务在后台运行，可以继续发布新任务" : "发送"}
                     >
                         <span className="flex items-center gap-1.5">
                             <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                                 <CreditSymbol />
                                 {credits.toLocaleString()}
                             </span>
-                            {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+                            <ArrowUp className="size-4" />
                         </span>
                     </Button>
                 </div>
@@ -464,6 +609,7 @@ function AssistantModeSwitch({ mode, theme, onChange }: { mode: AssistantMode; t
             {[
                 { value: "ask" as const, title: "对话", icon: <MessageSquare className="size-4" /> },
                 { value: "image" as const, title: "生图", icon: <ImageIcon className="size-4" /> },
+                { value: "director" as const, title: "导演", icon: <Workflow className="size-4" /> },
             ].map((item) => (
                 <Tooltip key={item.value} title={item.title}>
                     <button
@@ -499,11 +645,13 @@ function AssistantMessages({
     onRetry,
     onInsertImage,
     onInsertText,
+    onExecuteDirectorWorkflow,
 }: {
     messages: CanvasAssistantMessage[];
     onRetry: (message: CanvasAssistantMessage) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
+    onExecuteDirectorWorkflow: (message: CanvasAssistantMessage) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -517,18 +665,23 @@ function AssistantMessages({
                     >
                         {message.role === "assistant" ? (
                             <div className="mb-1 flex items-center gap-1.5 text-xs opacity-60">
-                                <MessageSquare className="size-3.5" />
-                                回答
+                                {message.mode === "director" ? <Workflow className="size-3.5" /> : <MessageSquare className="size-3.5" />}
+                                {message.mode === "director" ? "导演工作流" : "回答"}
                             </div>
                         ) : null}
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
-                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
+                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : message.mode === "director" ? "正在推演工作流" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1">
                             <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<RotateCcw className="size-3.5" />} onClick={() => onRetry(message)} title="重试" />
                             {!message.images?.length ? <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<Plus className="size-3.5" />} onClick={() => onInsertText(message.text)} title="插入画布" /> : null}
+                            {message.directorWorkflow ? (
+                                <Button size="small" className="!rounded-full" style={{ borderColor: theme.node.activeStroke, color: theme.node.text }} icon={message.isExecuting ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} disabled={message.isExecuting} onClick={() => onExecuteDirectorWorkflow(message)}>
+                                    {message.isExecuting ? "执行中" : "执行工作流"}
+                                </Button>
+                            ) : null}
                         </div>
                     ) : null}
                     {message.images?.map((image) => (
@@ -623,6 +776,40 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
     );
 }
 
+function DirectorReferencePackChip({
+    item,
+    theme,
+    onRoleChange,
+    onRemove,
+}: {
+    item: DirectorReferencePackItem;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onRoleChange: (role: DirectorReferenceRole) => void;
+    onRemove: () => void;
+}) {
+    const Icon = item.mediaType === "video" ? Film : item.mediaType === "audio" ? Mic2 : ImageIcon;
+    return (
+        <div className="flex min-h-9 items-center gap-2 rounded-lg border px-2 py-1" style={{ borderColor: theme.node.stroke, background: theme.node.panel, color: theme.node.text }}>
+            {item.dataUrl ? <img src={item.dataUrl} alt="" className="size-7 shrink-0 rounded-md object-cover" /> : item.url && item.mediaType === "video" ? <video src={item.url} className="size-7 shrink-0 rounded-md bg-black object-cover" muted preload="metadata" /> : <Icon className="size-4 shrink-0 opacity-80" />}
+            <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium">{item.title}</div>
+                <div className="truncate text-[10px] opacity-60">{item.mediaType === "image" ? "图片" : item.mediaType === "video" ? "视频" : item.mediaType === "audio" ? "音频" : "文本"}</div>
+            </div>
+            <Select
+                size="small"
+                value={item.role}
+                className="canvas-reference-role-select w-[94px] shrink-0"
+                popupMatchSelectWidth={140}
+                options={DIRECTOR_REFERENCE_ROLE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                onChange={onRoleChange}
+            />
+            <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full border" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel }} onClick={onRemove} aria-label="移除客户素材">
+                <X className="size-3" />
+            </button>
+        </div>
+    );
+}
+
 function assistantImageReferenceLabel(references: CanvasAssistantReference[], index: number) {
     if (!references[index]?.dataUrl) return undefined;
     const imageIndex = references.slice(0, index + 1).filter((item) => item.dataUrl).length - 1;
@@ -648,6 +835,35 @@ function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<
         .filter((item): item is CanvasAssistantReference => Boolean(item));
 }
 
+function buildSelectedReferencePack(nodes: CanvasNodeData[], selectedNodeIds: Set<string>, removedReferenceIds: Set<string>) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    return Array.from(selectedNodeIds)
+        .filter((id) => !removedReferenceIds.has(id))
+        .map((id) => nodeById.get(id))
+        .filter((node): node is CanvasNodeData => Boolean(node))
+        .map(createDirectorReferencePackItemFromNode)
+        .filter((item): item is DirectorReferencePackItem => Boolean(item));
+}
+
+function mergeReferencePackItems(items: DirectorReferencePackItem[]) {
+    const byNodeId = new Map<string, DirectorReferencePackItem>();
+    items.forEach((item) => byNodeId.set(item.nodeId, item));
+    return Array.from(byNodeId.values());
+}
+
+function referenceToDirectorReference(reference: CanvasAssistantReference): DirectorWorkflowReference {
+    return {
+        id: reference.id,
+        type: reference.type,
+        title: reference.title,
+        text: reference.text,
+    };
+}
+
+function findLastDirectorWorkflow(messages: CanvasAssistantMessage[]) {
+    return [...messages].reverse().find((message) => message.directorWorkflow)?.directorWorkflow;
+}
+
 async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<ChatCompletionMessage[]> {
     return Promise.all(
         messages.map(async (message, index) => {
@@ -664,6 +880,24 @@ async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<Ch
             };
         }),
     );
+}
+
+async function buildDirectorPlannerMessages(input: { prompt: string; references: DirectorWorkflowReference[]; referencePack: DirectorReferencePackItem[]; previousWorkflow?: DirectorWorkflow }): Promise<ChatCompletionMessage[]> {
+    const promptText = buildDirectorPlannerPrompt(input);
+    const imageItems = await Promise.all(
+        input.referencePack
+            .filter((item) => item.mediaType === "image" && item.dataUrl)
+            .map(async (item) => ({
+                type: "image_url" as const,
+                image_url: { url: await imageToDataUrl({ dataUrl: item.dataUrl, storageKey: item.storageKey }) },
+            })),
+    );
+    return [
+        {
+            role: "user",
+            content: imageItems.length ? [{ type: "text" as const, text: promptText }, ...imageItems] : promptText,
+        },
+    ];
 }
 
 function createSession(): CanvasAssistantSession {

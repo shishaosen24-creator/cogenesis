@@ -2,7 +2,7 @@
 
 import { Check, Search } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
-import { App, Empty, Input, Modal, Spin, Tag } from "antd";
+import { App, Input, Modal, Spin, Tag } from "antd";
 
 import { ALL_PROMPTS_OPTION } from "@/services/api/prompts";
 import { cn } from "@/lib/utils";
@@ -34,12 +34,25 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
     };
 
     return (
-        <Modal title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
-            <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
+        <Modal
+            className="sacred-prompt-select-modal"
+            title={
+                <div>
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">提示词库</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">选择一个提示词填入当前创作输入区</div>
+                </div>
+            }
+            open={open}
+            onCancel={() => onOpenChange(false)}
+            footer={null}
+            width={1040}
+            centered
+        >
+            <div className="sacred-prompt-select-body" data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="mx-auto max-w-2xl">
                     <Input size="large" prefix={<Search className="size-4 text-stone-400" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题查询" />
                 </div>
-                <div className="mt-5 grid gap-3">
+                <div className="sacred-prompt-filter-panel sacred-panel-soft mt-5 grid gap-3 p-3">
                     <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                         <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">分类</div>
                         <div className="flex flex-wrap gap-2">
@@ -64,18 +77,18 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
                         </div>
                     </div>
                 </div>
-                <div className="thin-scrollbar mt-6 max-h-[520px] overflow-y-auto pr-2" data-canvas-no-zoom onScroll={handleListScroll} onWheelCapture={(event) => event.stopPropagation()}>
+                <div className="sacred-prompt-select-list thin-scrollbar mt-6 max-h-[520px] overflow-y-auto pr-2" data-canvas-no-zoom onScroll={handleListScroll} onWheelCapture={(event) => event.stopPropagation()}>
                     {query.isLoading ? (
                         <div className="flex h-40 items-center justify-center">
                             <Spin />
                         </div>
                     ) : null}
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="sacred-prompt-select-grid grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         {items.map((item) => (
                             <PromptCard key={item.id} item={item} onOpen={() => selectPrompt(item.prompt)} onCopy={() => selectPrompt(item.prompt)} actionLabel="使用此提示词" actionIcon={<Check className="size-3.5" />} actionType="primary" />
                         ))}
                     </div>
-                    {!query.isLoading && items.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-8" /> : null}
+                    {!query.isLoading && items.length === 0 ? <PromptDialogEmptyState /> : null}
                     {query.isFetchingNextPage ? (
                         <div className="py-4 text-center">
                             <Spin size="small" />
@@ -84,5 +97,15 @@ export function PromptSelectDialog({ open, onOpenChange, onSelect }: { open: boo
                 </div>
             </div>
         </Modal>
+    );
+}
+
+function PromptDialogEmptyState() {
+    return (
+        <div className="sacred-empty-state mt-4 flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
+            <Search className="mb-4 size-9 text-[color:var(--sacred-tertiary)]" />
+            <div className="text-sm font-medium text-[color:var(--sacred-on-surface)]">没有找到匹配的提示词</div>
+            <div className="mt-2 max-w-sm text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">换一个关键词、分类或标签继续查找。</div>
+        </div>
     );
 }

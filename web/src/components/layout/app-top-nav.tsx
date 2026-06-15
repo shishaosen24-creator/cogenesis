@@ -21,23 +21,22 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-stone-200 bg-background/90 backdrop-blur-xl dark:border-stone-800">
-                    <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-6">
+                <header
+                    className={cn(
+                        "sticky top-0 z-20 h-16 shrink-0 border-b border-[color:var(--sacred-outline-variant)] bg-[color:var(--sacred-surface)]/86 shadow-[0_0_22px_rgba(197,160,89,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-[color:var(--sacred-surface)]/78",
+                        pathname === "/" && "fixed inset-x-0 top-0 stage-nav-reveal",
+                    )}
+                >
+                    <div className="mx-auto flex h-full max-w-[1440px] items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
-                            <Link href="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300">
-                                <span
-                                    className="size-5 shrink-0 bg-current"
-                                    style={{
-                                        mask: "url(/logo.svg) center / contain no-repeat",
-                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
-                                    }}
-                                />
-                                <span className="text-base font-medium">无限画布</span>
+                            <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[color:var(--sacred-on-surface)] transition hover:text-[color:var(--sacred-tertiary)]">
+                                <img src="/brand/site-logo-transparent.png" alt="CoGenesis" className="size-9 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(197,160,89,0.35)] transition group-hover:drop-shadow-[0_0_16px_rgba(197,160,89,0.55)]" />
+                                <span className="sacred-title text-lg font-semibold">CoGenesis</span>
                             </Link>
 
                             <button
                                 type="button"
-                                className="ml-3 inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 md:hidden dark:text-stone-300 dark:hover:text-white"
+                                className="ml-3 inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-[color:var(--sacred-outline-variant)]/70 text-[color:var(--sacred-on-surface-variant)] transition hover:border-[color:var(--sacred-tertiary)] hover:text-[color:var(--sacred-tertiary)] md:hidden"
                                 onClick={() => setMobileNavOpen(true)}
                                 aria-label="打开导航菜单"
                                 title="导航菜单"
@@ -45,7 +44,7 @@ export function AppTopNav() {
                                 <Menu className="size-5" />
                             </button>
 
-                            <nav className="hide-scrollbar ml-8 hidden h-16 min-w-0 items-center gap-7 overflow-x-auto md:flex">
+                            <nav className="hide-scrollbar ml-8 hidden h-16 min-w-0 items-center gap-2 overflow-x-auto md:flex">
                                 {navigationTools.map((tool) => {
                                     const Icon = tool.icon;
                                     const active = tool.slug === activeToolSlug;
@@ -54,10 +53,10 @@ export function AppTopNav() {
                                             key={tool.slug}
                                             href={`/${tool.slug}`}
                                             className={cn(
-                                                "relative flex h-16 shrink-0 items-center gap-2 text-sm leading-6 transition after:absolute after:inset-x-0 after:bottom-0 after:h-px",
+                                                "relative flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm leading-6 transition after:absolute after:inset-x-3 after:bottom-1 after:h-px after:origin-center after:transition",
                                                 active
-                                                    ? "font-medium text-stone-950 after:bg-stone-950 dark:text-stone-100 dark:after:bg-stone-100"
-                                                    : "text-stone-500 after:bg-transparent hover:text-stone-950 dark:text-stone-400 dark:hover:text-stone-100",
+                                                    ? "bg-[rgba(233,193,118,0.12)] font-medium text-[color:var(--sacred-tertiary)] after:bg-[color:var(--sacred-tertiary)]"
+                                                    : "text-[color:var(--sacred-on-surface-variant)] after:scale-x-0 after:bg-[color:var(--sacred-tertiary)] hover:bg-[rgba(233,193,118,0.07)] hover:text-[color:var(--sacred-on-surface)] hover:after:scale-x-100",
                                             )}
                                         >
                                             <Icon className="size-4" />
@@ -69,7 +68,7 @@ export function AppTopNav() {
                         </div>
 
                         <div className="my-auto flex h-9 min-w-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
-                            <UserStatusActions />
+                            <UserStatusActions compactOnMobile />
                         </div>
                     </div>
                 </header>

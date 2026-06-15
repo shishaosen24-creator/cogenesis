@@ -79,7 +79,7 @@ export default function AdminPromptsPage() {
             title: "封面",
             dataIndex: "coverUrl",
             width: 88,
-            render: (_, item) => <Image src={item.coverUrl || "/logo.svg"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/logo.svg" />,
+            render: (_, item) => <Image src={item.coverUrl || "/brand/site-logo-transparent.png"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/brand/site-logo-transparent.png" />,
         },
         {
             title: "标题",
@@ -114,16 +114,17 @@ export default function AdminPromptsPage() {
             key: "actions",
             width: 112,
             align: "right",
+            fixed: "right",
             render: (_, item) => (
                 <Space size={4}>
                     <Tooltip title="详情">
-                        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setDetailPrompt(item)} />
+                        <Button aria-label="查看提示词详情" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EyeOutlined />} onClick={() => setDetailPrompt(item)} />
                     </Tooltip>
                     <Tooltip title="编辑">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingPrompt(item)} />
+                        <Button aria-label="编辑提示词" type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<EditOutlined />} onClick={() => setEditingPrompt(item)} />
                     </Tooltip>
                     <Tooltip title="删除">
-                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingPrompt(item)} />
+                        <Button aria-label="删除提示词" danger type="text" size="small" className="!h-7 !w-7 !min-w-7 !p-0" icon={<DeleteOutlined />} onClick={() => setDeletingPrompt(item)} />
                     </Tooltip>
                 </Space>
             ),
@@ -133,7 +134,7 @@ export default function AdminPromptsPage() {
     return (
         <main style={{ padding: 24 }}>
             <Flex vertical gap={16}>
-                <Card variant="borderless">
+                <Card variant="borderless" className="sacred-panel-soft sacred-admin-filter-card">
                     <Form layout="vertical">
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
@@ -179,7 +180,8 @@ export default function AdminPromptsPage() {
                     search={false}
                     defaultSize="middle"
                     tableLayout="fixed"
-                    cardProps={{ variant: "borderless" }}
+                    scroll={{ x: 880 }}
+                    cardProps={{ variant: "borderless", className: "sacred-panel-soft" }}
                     headerTitle={
                         <Space>
                             <Typography.Text strong>提示词列表</Typography.Text>
@@ -211,50 +213,82 @@ export default function AdminPromptsPage() {
                 />
             </Flex>
 
-            <Modal title={editingPrompt?.id ? "编辑提示词" : "新增提示词"} open={Boolean(editingPrompt)} width={720} onCancel={() => setEditingPrompt(null)} onOk={() => void savePrompt()} okText="保存" cancelText="取消" destroyOnHidden>
-                <Form form={form} layout="vertical" requiredMark={false}>
-                    <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="category" label="分类">
-                        <Select options={categories.map((item) => ({ label: item.name, value: item.category }))} />
-                    </Form.Item>
-                    <Form.Item name="coverUrl" label="封面 URL">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="tagText" label="标签，用逗号分隔">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="prompt" label="提示词" rules={[{ required: true, message: "请输入提示词" }]}>
-                        <Input.TextArea rows={6} />
-                    </Form.Item>
-                </Form>
+            <Modal
+                className="sacred-admin-editor-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">PROMPT VAULT</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            {editingPrompt?.id ? "编辑提示词" : "新增提示词"}
+                        </Typography.Title>
+                        <Typography.Text className="sacred-muted">标题、分组、标签和提示词正文</Typography.Text>
+                    </Flex>
+                }
+                open={Boolean(editingPrompt)}
+                width={720}
+                onCancel={() => setEditingPrompt(null)}
+                footer={
+                    <div className="sacred-admin-editor-actions">
+                        <Button autoInsertSpace={false} onClick={() => setEditingPrompt(null)}>
+                            取消
+                        </Button>
+                        <Button type="primary" autoInsertSpace={false} onClick={() => void savePrompt()}>
+                            保存
+                        </Button>
+                    </div>
+                }
+                destroyOnHidden
+            >
+                <div className="sacred-admin-editor-body">
+                    <Form form={form} layout="vertical" requiredMark={false}>
+                        <Typography.Text strong className="sacred-admin-section-title">
+                            提示词信息
+                        </Typography.Text>
+                        <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="category" label="分类">
+                            <Select options={categories.map((item) => ({ label: item.name, value: item.category }))} />
+                        </Form.Item>
+                        <Form.Item name="coverUrl" label="封面 URL">
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="tagText" label="标签，用逗号分隔">
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="prompt" label="提示词" rules={[{ required: true, message: "请输入提示词" }]}>
+                            <Input.TextArea rows={6} />
+                        </Form.Item>
+                    </Form>
+                </div>
             </Modal>
 
             <Modal title="提示词详情" open={Boolean(detailPrompt)} width={760} onCancel={() => setDetailPrompt(null)} footer={<Button onClick={() => setDetailPrompt(null)}>关闭</Button>}>
                 {detailPrompt ? (
-                    <Flex vertical gap={14}>
-                        <Flex gap={14} align="start">
-                            <Image src={detailPrompt.coverUrl || "/logo.svg"} alt={detailPrompt.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
-                            <Flex vertical gap={8} style={{ minWidth: 0 }}>
-                                <Typography.Title level={5} style={{ margin: 0 }}>
+                    <div className="space-y-4 text-[color:var(--sacred-on-surface)]">
+                        <div className="grid gap-4 sm:grid-cols-[116px_minmax(0,1fr)] sm:items-start">
+                            <Image src={detailPrompt.coverUrl || "/brand/site-logo-transparent.png"} alt={detailPrompt.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/brand/site-logo-transparent.png" />
+                            <div className="min-w-0 space-y-2">
+                                <Typography.Title level={5} className="!m-0 break-words !text-[color:var(--sacred-on-surface)]">
                                     {detailPrompt.title}
                                 </Typography.Title>
-                                <Space wrap>
+                                <Space size={[4, 4]} wrap>
                                     <Tag>{categoryName(detailPrompt.category)}</Tag>
                                     {(detailPrompt.tags || []).map((tag) => (
                                         <Tag key={tag}>{tag}</Tag>
                                     ))}
                                 </Space>
-                            </Flex>
-                        </Flex>
+                            </div>
+                        </div>
                         {detailPrompt.preview ? (
-                            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                            <Typography.Paragraph type="secondary" className="!m-0 break-words !text-[color:var(--sacred-on-surface-variant)]">
                                 {detailPrompt.preview}
                             </Typography.Paragraph>
                         ) : null}
-                        <Input.TextArea value={detailPrompt.prompt} rows={8} readOnly />
-                        <Space>
+                        <div className="sacred-panel-soft max-h-80 overflow-y-auto whitespace-pre-wrap break-words p-4 text-sm leading-6 text-[color:var(--sacred-on-surface)]">
+                            {detailPrompt.prompt || "暂无提示词内容"}
+                        </div>
+                        <Space size={[8, 8]} wrap>
                             <Button icon={<CopyOutlined />} onClick={() => copyText(detailPrompt.prompt)}>
                                 复制提示词
                             </Button>
@@ -264,7 +298,7 @@ export default function AdminPromptsPage() {
                                 </Button>
                             ) : null}
                         </Space>
-                    </Flex>
+                    </div>
                 ) : null}
             </Modal>
 
@@ -272,6 +306,7 @@ export default function AdminPromptsPage() {
                 title="同步远程提示词源"
                 open={isSyncOpen}
                 width={640}
+                className="sacred-sync-modal"
                 onCancel={() => !isSyncing && setIsSyncOpen(false)}
                 mask={{ closable: !isSyncing }}
                 footer={
@@ -282,15 +317,20 @@ export default function AdminPromptsPage() {
             >
                 <Table
                     rowKey="category"
+                    className="sacred-sync-table"
                     dataSource={categories.filter((item) => item.remote)}
                     pagination={false}
+                    scroll={{ x: 300 }}
                     columns={[
                         {
                             title: "远程源",
                             dataIndex: "name",
+                            width: 244,
                             render: (_, item) => (
-                                <Flex align="center" gap={8}>
-                                    {item.name}
+                                <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                                    <Typography.Text ellipsis style={{ minWidth: 0 }}>
+                                        {item.name}
+                                    </Typography.Text>
                                     {item.githubUrl ? (
                                         <Typography.Link href={item.githubUrl} target="_blank">
                                             <ExportOutlined />
@@ -302,21 +342,25 @@ export default function AdminPromptsPage() {
                         {
                             title: "",
                             key: "sync",
-                            width: 96,
+                            width: 48,
                             align: "right",
                             render: (_, item) => (
-                                <Button
-                                    type="primary"
-                                    loading={isSyncing}
-                                    onClick={async () => {
-                                        try {
-                                            await syncCategory(item.category);
-                                            setIsSyncOpen(false);
-                                        } catch {}
-                                    }}
-                                >
-                                    同步
-                                </Button>
+                                <Tooltip title="同步">
+                                    <Button
+                                        aria-label="同步提示词分类"
+                                        type="primary"
+                                        size="small"
+                                        className="sacred-sync-action !h-7 !w-7 !min-w-7 !p-0"
+                                        icon={<SyncOutlined />}
+                                        loading={isSyncing}
+                                        onClick={async () => {
+                                            try {
+                                                await syncCategory(item.category);
+                                                setIsSyncOpen(false);
+                                            } catch {}
+                                        }}
+                                    />
+                                </Tooltip>
                             ),
                         },
                     ]}
@@ -324,23 +368,64 @@ export default function AdminPromptsPage() {
             </Modal>
 
             <Modal
-                title="删除提示词"
+                className="sacred-admin-delete-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">DELETE PROMPT</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            删除提示词
+                        </Typography.Title>
+                    </Flex>
+                }
                 open={Boolean(deletingPrompt)}
                 onCancel={() => setDeletingPrompt(null)}
-                onOk={async () => {
-                    if (!deletingPrompt) return;
-                    await deletePrompt(deletingPrompt.id);
-                    setDeletingPrompt(null);
-                }}
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                cancelText="取消"
+                footer={
+                    <div className="sacred-admin-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setDeletingPrompt(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            danger
+                            type="primary"
+                            autoInsertSpace={false}
+                            onClick={async () => {
+                                if (!deletingPrompt) return;
+                                await deletePrompt(deletingPrompt.id);
+                                setDeletingPrompt(null);
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </div>
+                }
             >
-                确定删除「{deletingPrompt?.title}」吗？删除后会从当前分类中删除。
+                <div className="sacred-admin-delete-body">确定删除「{deletingPrompt?.title}」吗？删除后会从当前分类中删除。</div>
             </Modal>
 
-            <Modal title="批量删除提示词" open={isBatchDeleteOpen} onCancel={() => setIsBatchDeleteOpen(false)} onOk={() => void batchDeletePrompts()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除已选中的 {selectedPromptIds.length} 条提示词吗？删除后会从当前分类中删除。
+            <Modal
+                className="sacred-admin-delete-modal"
+                title={
+                    <Flex vertical gap={4}>
+                        <span className="sacred-label">BATCH DELETE</span>
+                        <Typography.Title level={4} className="sacred-title !m-0">
+                            批量删除提示词
+                        </Typography.Title>
+                    </Flex>
+                }
+                open={isBatchDeleteOpen}
+                onCancel={() => setIsBatchDeleteOpen(false)}
+                footer={
+                    <div className="sacred-admin-delete-actions">
+                        <Button autoInsertSpace={false} onClick={() => setIsBatchDeleteOpen(false)}>
+                            取消
+                        </Button>
+                        <Button danger type="primary" autoInsertSpace={false} onClick={() => void batchDeletePrompts()}>
+                            删除
+                        </Button>
+                    </div>
+                }
+            >
+                <div className="sacred-admin-delete-body">确定删除已选中的 {selectedPromptIds.length} 条提示词吗？删除后会从当前分类中删除。</div>
             </Modal>
         </main>
     );

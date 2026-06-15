@@ -14,8 +14,12 @@ type MobileNavDrawerProps = {
 
 export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDrawerProps) {
     return (
-        <Drawer title="导航" placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
-            <div className="space-y-1">
+        <Drawer title="导航" placement="left" size={300} open={open} onClose={onClose} className="md:hidden">
+            <div className="space-y-3">
+                <div className="portal-glass mb-5 px-4 py-4">
+                    <div className="sacred-label">workspace</div>
+                    <div className="sacred-title mt-2 text-xl font-semibold">CoGenesis</div>
+                </div>
                 {navigationTools.map((tool) => {
                     const Icon = tool.icon;
                     const active = tool.slug === activeToolSlug;
@@ -25,8 +29,10 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                             href={`/${tool.slug}`}
                             onClick={onClose}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base transition",
-                                active ? "bg-stone-100 font-medium text-stone-950 dark:bg-stone-800 dark:text-stone-100" : "text-stone-600 hover:bg-stone-100 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100",
+                                "flex items-center gap-3 rounded-md border px-3 py-3 text-base transition",
+                                active
+                                    ? "border-[rgba(233,193,118,0.6)] bg-[rgba(233,193,118,0.12)] font-medium text-[color:var(--sacred-tertiary)] shadow-[0_0_16px_rgba(197,160,89,0.16)]"
+                                    : "border-transparent text-[color:var(--sacred-on-surface-variant)] hover:border-[rgba(233,193,118,0.36)] hover:bg-[rgba(233,193,118,0.08)] hover:text-[color:var(--sacred-on-surface)]",
                             )}
                         >
                             <Icon className="size-5" />

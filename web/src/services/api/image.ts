@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, buildCapabilityApiUrl, getCapabilityEndpoint, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -168,19 +168,20 @@ function withSystemPrompt(config: AiConfig, prompt: string) {
     return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
 }
 
-function aiApiUrl(config: AiConfig, path: string) {
-    return config.channelMode === "remote" ? `/api/v1${path}` : buildApiUrl(config.baseUrl, path);
+function aiApiUrl(config: AiConfig, path: string, capability: ModelCapability) {
+    return buildCapabilityApiUrl(config, capability, path);
 }
 
-function aiHeaders(config: AiConfig, contentType?: string) {
+function aiHeaders(config: AiConfig, capability: ModelCapability, contentType?: string) {
     const token = useUserStore.getState().token;
+    const endpoint = getCapabilityEndpoint(config, capability);
     return config.channelMode === "remote"
         ? {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
               ...(contentType ? { "Content-Type": contentType } : {}),
           }
         : {
-              Authorization: `Bearer ${config.apiKey}`,
+              Authorization: `Bearer ${endpoint.apiKey}`,
               ...(contentType ? { "Content-Type": contentType } : {}),
           };
 }
@@ -200,7 +201,7 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
     const requestSize = resolveRequestSize(quality, config.size);
     try {
         const response = await axios.post<ImageApiResponse>(
-            aiApiUrl(config, "/images/generations"),
+            aiApiUrl(config, "/images/generations", "image"),
             {
                 model: config.model,
                 prompt: withSystemPrompt(config, prompt),
@@ -211,7 +212,7 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
                 output_format: IMAGE_OUTPUT_FORMAT,
             },
             {
-                headers: aiHeaders(config, "application/json"),
+                headers: aiHeaders(config, "image", "application/json"),
             },
         );
         const images = parseImagePayload(response.data);
@@ -244,7 +245,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
-        const response = await axios.post<ImageApiResponse>(aiApiUrl(config, "/images/edits"), formData, { headers: aiHeaders(config) });
+        const response = await axios.post<ImageApiResponse>(aiApiUrl(config, "/images/edits", "image"), formData, { headers: aiHeaders(config, "image") });
         const images = parseImagePayload(response.data);
         refreshRemoteUser(config);
         return images;
@@ -260,7 +261,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
 
     try {
         const response = await axios.post(
-            aiApiUrl(config, "/chat/completions"),
+            aiApiUrl(config, "/chat/completions", "text"),
             {
                 model: config.model,
                 messages: withSystemMessage(config, messages),
@@ -268,7 +269,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
             },
             {
                 headers: {
-                    ...aiHeaders(config, "application/json"),
+                    ...aiHeaders(config, "text", "application/json"),
                 } as Record<string, string>,
                 responseType: "text",
                 onDownloadProgress: (event) => {
@@ -315,12 +316,15 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
     return answer || "没有返回内容";
 }
 
-export async function fetchImageModels(config: AiConfig) {
+export async function fetchImageModels(config: AiConfig, capability?: ModelCapability) {
     if (config.channelMode === "remote") return config.models;
+    const endpoint = capability ? getCapabilityEndpoint(config, capability) : { baseUrl: config.baseUrl, apiKey: config.apiKey };
+    if (!endpoint.baseUrl.trim()) throw new Error(`请先填写${capabilityLabel(capability)} Base URL`);
+    if (!endpoint.apiKey.trim()) throw new Error(`请先填写${capabilityLabel(capability)} API Key`);
     try {
-        const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(config.baseUrl, "/models"), {
+        const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(endpoint.baseUrl, "/models"), {
             headers: {
-                Authorization: `Bearer ${config.apiKey}`,
+                Authorization: `Bearer ${endpoint.apiKey}`,
             },
         });
         return (response.data.data || [])
@@ -330,4 +334,12 @@ export async function fetchImageModels(config: AiConfig) {
     } catch (error) {
         throw new Error(readAxiosError(error, "读取模型失败"));
     }
+}
+
+function capabilityLabel(capability?: ModelCapability) {
+    if (capability === "image") return "图像";
+    if (capability === "video") return "视频";
+    if (capability === "text") return "文本";
+    if (capability === "audio") return "音频";
+    return "通用";
 }

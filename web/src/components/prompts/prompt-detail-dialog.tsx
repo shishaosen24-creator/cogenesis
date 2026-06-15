@@ -8,13 +8,25 @@ import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void }) {
     return (
         <>
-            <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860}>
+            <Modal
+                className="sacred-prompt-detail-modal"
+                title={
+                    <div>
+                        <div className="max-w-full break-words text-base font-semibold text-[color:var(--sacred-on-surface)]">{prompt?.title || "提示词详情"}</div>
+                        <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">{prompt?.category || "查看提示词内容、标签和预览"}</div>
+                    </div>
+                }
+                open={Boolean(prompt)}
+                onCancel={onClose}
+                footer={null}
+                width={860}
+            >
                 {prompt ? (
-                    <>
+                    <div className="sacred-prompt-detail-body">
                         <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
                             <div className="space-y-3">
-                                <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
-                                {prompt.preview ? <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-stone-100 p-3 text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{prompt.preview}</pre> : null}
+                                {prompt.coverUrl ? <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" /> : <div className="sacred-empty-state flex aspect-[4/3] items-center justify-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无封面</div>}
+                                {prompt.preview ? <pre className="sacred-panel-soft max-h-60 overflow-auto whitespace-pre-wrap p-3 text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">{prompt.preview}</pre> : null}
                             </div>
                             <div className="min-w-0">
                                 <div className="flex flex-wrap gap-1.5">
@@ -24,11 +36,11 @@ export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { p
                                         </Tag>
                                     ))}
                                 </div>
-                                <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-stone-800 dark:text-stone-300">{prompt.prompt}</p>
-                                <div className="mt-4 text-xs text-stone-500 dark:text-stone-400">
+                                <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[color:var(--sacred-on-surface)]">{prompt.prompt}</p>
+                                <div className="mt-4 text-xs text-[color:var(--sacred-on-surface-variant)]">
                                     创建：{formatPromptDate(prompt.createdAt)} · 更新：{formatPromptDate(prompt.updatedAt)}
                                 </div>
-                                <Space wrap className="mt-5">
+                                <Space wrap className="sacred-prompt-detail-actions mt-5">
                                     <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(prompt.prompt)}>
                                         复制提示词
                                     </Button>
@@ -40,7 +52,7 @@ export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { p
                                 </Space>
                             </div>
                         </div>
-                    </>
+                    </div>
                 ) : null}
             </Modal>
         </>

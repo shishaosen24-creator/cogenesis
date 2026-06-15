@@ -15,6 +15,11 @@ export type CanvasResourceReference = {
     active: boolean;
 };
 
+export type CanvasGenerationResourceEntry = {
+    node: CanvasNodeData;
+    sourceNodeId?: string;
+};
+
 export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connections: CanvasConnection[], contextNodeId?: string | null) {
     const contextNodes = contextNodeId ? getMentionResourceNodes(contextNodeId, nodes, connections) : [];
     const globalReferences = labelResourceNodes(nodes.filter(isResourceNode), false);
@@ -36,14 +41,37 @@ export function getMentionResourceNodes(nodeId: string, nodes: CanvasNodeData[],
 }
 
 export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    return getGenerationResourceEntries(nodeId, nodes, connections).map((entry) => entry.node);
+}
+
+export function getGenerationResourceEntries(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): CanvasGenerationResourceEntry[] {
     const configInputs = getConnectedConfigResourceNodes(nodeId, nodes, connections);
-    if (configInputs.length) return configInputs;
-    const ownInputs = getContextResourceNodes(nodeId, nodes, connections);
+    if (configInputs.length) return configInputs.map((node) => ({ node }));
+    const ownInputs = getContextResourceEntries(nodeId, nodes, connections);
     if (ownInputs.length) return ownInputs;
     return [];
 }
 
 function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    return getContextResourceEntries(nodeId, nodes, connections).map((entry) => entry.node);
+}
+
+function getContextResourceEntries(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): CanvasGenerationResourceEntry[] {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    return uniqueResourceEntries(
+        connections
+            .filter((connection) => connection.toNodeId === nodeId)
+            .flatMap((connection) => {
+                const source = nodeById.get(connection.fromNodeId);
+                if (!source) return [];
+                if (isResourceNode(source)) return [{ node: source, sourceNodeId: source.id }];
+                if (source.type === CanvasNodeType.Config) return getGeneratedResourceNodes(source.id, nodes, connections).map((node) => ({ node, sourceNodeId: source.id }));
+                return [];
+            }),
+    );
+}
+
+function getDirectContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     return connections
         .filter((connection) => connection.toNodeId === nodeId)
         .map((connection) => nodes.find((node) => node.id === connection.fromNodeId))
@@ -53,7 +81,41 @@ function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connec
 function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const configConnection = connections.find((connection) => connection.fromNodeId === nodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config);
     if (!configConnection) return [];
-    return getContextResourceNodes(configConnection.toNodeId, nodes, connections).filter((node) => node.id !== nodeId);
+    return getDirectContextResourceNodes(configConnection.toNodeId, nodes, connections).filter((node) => node.id !== nodeId);
+}
+
+function getGeneratedResourceNodes(sourceNodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const directOutputs = connections
+        .filter((connection) => connection.fromNodeId === sourceNodeId)
+        .map((connection) => nodeById.get(connection.toNodeId))
+        .filter((node): node is CanvasNodeData => Boolean(node && isResourceNode(node)));
+
+    return uniqueNodes(
+        directOutputs.flatMap((node) => {
+            const batchChildren = (node.metadata?.batchChildIds || []).map((childId) => nodeById.get(childId)).filter((child): child is CanvasNodeData => Boolean(child && isResourceNode(child)));
+            return [node, ...batchChildren];
+        }),
+    );
+}
+
+function uniqueNodes(nodes: CanvasNodeData[]) {
+    const seen = new Set<string>();
+    return nodes.filter((node) => {
+        if (seen.has(node.id)) return false;
+        seen.add(node.id);
+        return true;
+    });
+}
+
+function uniqueResourceEntries(entries: CanvasGenerationResourceEntry[]) {
+    const seen = new Set<string>();
+    return entries.filter((entry) => {
+        const key = `${entry.sourceNodeId || entry.node.id}:${entry.node.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {

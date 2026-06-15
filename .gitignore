@@ -8,3 +8,26 @@ data/
 *.tsbuildinfo
 .DS_Store
 .idea
+
+# local automation and test artifacts
+.playwright-cli/
+output/
+test-results/
+playwright-report/
+coverage/
+.nyc_output/
+.cache/
+tmp/
+temp/
+*.tmp
+
+# local archives and databases
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar

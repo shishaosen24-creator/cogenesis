@@ -7,7 +7,6 @@
     "features",
     "render",
     "docker",
-    "third-party-prompt-repositories",
-    "[在线体验](https://infinite-canvas-cpco.onrender.com/)"
+    "third-party-prompt-repositories"
   ]
 }

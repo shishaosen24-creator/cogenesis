@@ -56,11 +56,26 @@ export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm }: { da
     };
 
     return (
-        <Modal title="裁剪图片" open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={780} centered destroyOnHidden>
-            <div className="space-y-4">
+        <Modal
+            className="canvas-image-tool-modal"
+            title={
+                <div>
+                    <div className="text-base font-semibold text-[color:var(--sacred-on-surface)]">裁剪图片</div>
+                    <div className="mt-1 text-xs font-normal text-[color:var(--sacred-on-surface-variant)]">拖动白色区域调整构图，确认后生成裁剪节点</div>
+                </div>
+            }
+            open={open && Boolean(dataUrl)}
+            onCancel={onClose}
+            footer={null}
+            width={780}
+            centered
+            destroyOnHidden
+            styles={{ body: { maxHeight: "min(72vh, 680px)", overflowY: "auto" } }}
+        >
+            <div className="canvas-image-tool-shell space-y-4">
                 <div className="flex justify-center">
-                    <div ref={boxRef} className="relative inline-block max-w-full overflow-hidden rounded-lg bg-black select-none">
-                        <img src={dataUrl} alt="" className="block max-h-[62vh] max-w-full opacity-90" draggable={false} />
+                    <div ref={boxRef} className="canvas-image-tool-preview relative inline-block max-w-full overflow-hidden rounded-lg bg-black select-none">
+                        <img src={dataUrl} alt="" className="block max-h-[58vh] max-w-full opacity-90" draggable={false} />
                         <CropMask crop={crop} />
                         <div className="absolute cursor-move border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,.3),0_0_28px_rgba(0,0,0,.28)]" style={cropStyle(crop)} onPointerDown={(event) => startDrag("move", event)}>
                             <div className="pointer-events-none absolute inset-x-0 top-1/3 border-t border-white/50" />
@@ -74,7 +89,7 @@ export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm }: { da
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <div className="canvas-image-tool-meta sacred-panel-soft flex flex-wrap items-center justify-between gap-3 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-3 text-sm opacity-80">
                         <span>裁剪尺寸 {cropSize ? `${cropSize.width} x ${cropSize.height}` : "未知"}</span>
                         <span>比例 {cropSize ? formatRatio(cropSize.width, cropSize.height) : "未知"}</span>
@@ -89,7 +104,7 @@ export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm }: { da
                     </Button>
                 </div>
 
-                <div className="flex items-center justify-end gap-2">
+                <div className="canvas-image-tool-actions flex items-center justify-end gap-2">
                     <Button onClick={() => setCrop(defaultCrop)}>重置</Button>
                     <Button icon={<X className="size-4" />} onClick={onClose}>
                         取消

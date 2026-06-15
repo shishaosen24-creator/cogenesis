@@ -14,3 +14,12 @@ func Prompts(w http.ResponseWriter, r *http.Request) {
 	}
 	OK(w, result)
 }
+
+func SyncPrompts(w http.ResponseWriter, r *http.Request) {
+	result, err := service.SyncRemotePromptCategoriesPublic()
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
