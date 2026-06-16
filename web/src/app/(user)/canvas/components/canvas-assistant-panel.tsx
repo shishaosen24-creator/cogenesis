@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Bot, Film, History, ImageIcon, LoaderCircle, MessageSquare, Mic2, PanelRightClose, Paperclip, Play, Plus, RotateCcw, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
+import { ArrowUp, Bot, CheckCircle2, Film, GitBranch, History, ImageIcon, LoaderCircle, MessageSquare, Mic2, PanelRightClose, Paperclip, Play, Plus, RotateCcw, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
 import { Button, Modal, Select, Tooltip } from "antd";
 import { motion } from "motion/react";
 
@@ -20,12 +20,14 @@ import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
+import { CanvasLocalAgentPanel } from "./canvas-local-agent-panel";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
-import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
+import { CanvasNodeType, type AIChainEvent, type AIChainEventState, type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasGenerationMode, type CanvasNodeData } from "../types";
 import { DIRECTOR_REFERENCE_ROLE_OPTIONS, createDirectorReferencePackItemFromNode, directorReferencePackToLegacyReferences } from "../director/reference-pack";
 import { buildDirectorPlannerPrompt, createFallbackDirectorWorkflow, formatDirectorWorkflowText, parseDirectorWorkflow } from "../director/workflow-planner";
 import type { DirectorReferencePackItem, DirectorReferenceRole, DirectorWorkflow, DirectorWorkflowMaterialization, DirectorWorkflowReference, DirectorWorkflowRunReport } from "../director/types";
-import type { CanvasAgentAssetPackItem, CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
+import { buildDirectorWorkflowQueueSummary } from "../utils/director-workflow-queue";
+import type { CanvasAgentAssetPackItem, CanvasAgentOp, CanvasAgentSnapshot, CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
 
 type AssistantMode = "ask" | "image" | "director";
 type CanvasControlPanelMode = "director" | "local-agent";
@@ -51,14 +53,19 @@ type CanvasAssistantPanelProps = {
     onSharedReferencePackChange: (pack: DirectorReferencePackItem[]) => void;
     sharedAssetPack: CanvasAgentAssetPackItem[];
     sharedTaskQueue: CanvasAgentTaskQueueItem[];
+    sharedChainEvents: AIChainEvent[];
     panelMode: CanvasControlPanelMode;
     onPanelModeChange: (mode: CanvasControlPanelMode) => void;
+    agentSnapshot: CanvasAgentSnapshot;
+    canUndoAgentOps: boolean;
+    onApplyAgentOps: (ops: CanvasAgentOp[]) => unknown;
+    onUndoAgentOps: () => CanvasAgentSnapshot | null;
     hidden?: boolean;
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onHandoffDirectorWorkflowToAgent, onPasteImage, onAttachReferenceFile, sharedReferencePack, onSharedReferencePackChange, sharedAssetPack, sharedTaskQueue, panelMode, onPanelModeChange, hidden = false, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onApplyDirectorWorkflow, onExecuteDirectorWorkflow, onHandoffDirectorWorkflowToAgent, onPasteImage, onAttachReferenceFile, sharedReferencePack, onSharedReferencePackChange, sharedAssetPack, sharedTaskQueue, sharedChainEvents, panelMode, onPanelModeChange, agentSnapshot, canUndoAgentOps, onApplyAgentOps, onUndoAgentOps, hidden = false, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -116,16 +123,18 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const assistantConfig = useMemo(() => ({ ...effectiveConfig, count: effectiveConfig.canvasImageCount || effectiveConfig.count }), [effectiveConfig]);
     const iconButtonStyle = { color: theme.node.muted };
     const hasRunningTasks = Object.keys(runningTasks).length > 0;
+    const workflowQueueSummary = useMemo(() => buildDirectorWorkflowQueueSummary(sharedTaskQueue), [sharedTaskQueue]);
     const sharedSummary = useMemo(
         () => ({
             nodes: nodes.length,
             references: activeReferencePack.length,
             assets: sharedAssetPack.length,
+            workflows: workflowQueueSummary.length,
             queue: sharedTaskQueue.length,
             ready: sharedTaskQueue.filter((item) => item.runState === "ready" || item.runState === "planned").length,
             running: sharedTaskQueue.filter((item) => item.runState === "running").length,
         }),
-        [activeReferencePack.length, nodes.length, sharedAssetPack.length, sharedTaskQueue],
+        [activeReferencePack.length, nodes.length, sharedAssetPack.length, sharedTaskQueue, workflowQueueSummary.length],
     );
 
     useEffect(() => {
@@ -366,7 +375,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         <PanelModeSwitch value={panelMode} theme={theme} onChange={onPanelModeChange} />
                     </div>
                     <div className="flex items-center gap-1">
-                        {view === "history" ? (
+                        {panelMode === "director" && view === "history" ? (
                             <>
                                 <Tooltip title="删除选中">
                                     <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Trash2 className="size-4" />} disabled={!checkedChatIds.length} onClick={() => setDeleteChatIds(checkedChatIds)} />
@@ -384,94 +393,112 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                                 </Tooltip>
                             </>
                         ) : null}
-                        <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={() => setView(view === "history" ? "chat" : "history")} />
-                        </Tooltip>
-                        <Tooltip title="新对话">
-                            <Button
-                                type="text"
-                                shape="circle"
-                                className="!h-8 !w-8 !min-w-8"
-                                style={iconButtonStyle}
-                                icon={<Plus className="size-4" />}
-                                disabled={!hasMessages}
-                                onClick={() => {
-                                    startChatSession();
-                                    setView("chat");
-                                }}
-                            />
-                        </Tooltip>
-                        <Tooltip title="配置">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={() => openConfigDialog(false)} />
-                        </Tooltip>
+                        {panelMode === "director" ? (
+                            <>
+                                <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
+                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={() => setView(view === "history" ? "chat" : "history")} />
+                                </Tooltip>
+                                <Tooltip title="新对话">
+                                    <Button
+                                        type="text"
+                                        shape="circle"
+                                        className="!h-8 !w-8 !min-w-8"
+                                        style={iconButtonStyle}
+                                        icon={<Plus className="size-4" />}
+                                        disabled={!hasMessages}
+                                        onClick={() => {
+                                            startChatSession();
+                                            setView("chat");
+                                        }}
+                                    />
+                                </Tooltip>
+                                <Tooltip title="配置">
+                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={() => openConfigDialog(false)} />
+                                </Tooltip>
+                            </>
+                        ) : null}
                         <Tooltip title="收起对话">
                             <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
                         </Tooltip>
                     </div>
                 </div>
-                <DirectorSharedContextSummary theme={theme} summary={sharedSummary} />
+                <DirectorSharedContextSummary theme={theme} summary={sharedSummary} activeMode={panelMode} workflowQueueSummary={workflowQueueSummary} />
 
-                <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-                    {view === "history" ? (
-                        <AssistantHistory
-                            sessions={historySessions}
-                            activeSession={activeSession}
-                            checkedIds={checkedChatIds.filter((id) => historySessions.some((session) => session.id === id))}
-                            onToggleChecked={(id, checked) => setCheckedChatIds((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)))}
-                            onOpen={(id) => {
-                                setLocalActiveSessionId(id);
-                                setView("chat");
-                            }}
-                            onDelete={(id) => setDeleteChatIds([id])}
-                        />
-                    ) : messages.length ? (
-                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onExecuteDirectorWorkflow={executeDirectorMessage} onHandoffDirectorWorkflowToAgent={handoffDirectorMessageToAgent} />
-                    ) : (
-                        <div className="flex h-full flex-col items-center justify-center px-1 text-center">
-                            <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
-                                <span>共生画布</span>
-                                <DiaTextReveal className="absolute inset-0" colors={["#e9c176", "#fff1c4", "#a98f51"]} textColor="transparent" duration={1.8} startOnView={false} text="共生画布" />
-                            </div>
-                            <div className="mt-3 font-serif text-base italic opacity-60">人与 AI 彼此创世，彼此成就。</div>
-                        </div>
-                    )}
-                </div>
-
-                {view === "chat" ? (
-                    <AssistantComposer
-                        mode={mode}
-                        prompt={prompt}
-                        isRunning={hasRunningTasks}
-                        references={selectedReferences}
-                        referencePack={activeReferencePack}
-                        config={assistantConfig}
-                        onModeChange={setMode}
-                        onPromptChange={setPrompt}
-                        onSubmit={submit}
-                        onConfigChange={(key, value) => updateConfig(key === "count" ? "canvasImageCount" : key, value)}
-                        onMissingConfig={() => openConfigDialog(true)}
-                        onRemoveReference={(id) => {
-                            setRemovedReferenceIds((prev) => new Set(prev).add(id));
-                            updateReferencePack((prev) => prev.filter((item) => item.nodeId !== id));
-                            if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
-                        }}
-                        onPasteImage={onPasteImage}
-                        onAttachReferenceFile={onAttachReferenceFile}
-                        onReferenceRoleChange={(id, role) => {
-                            updateReferencePack((prev) => {
-                                const hasItem = prev.some((item) => item.id === id || item.nodeId === id);
-                                if (hasItem) return prev.map((item) => (item.id === id || item.nodeId === id ? { ...item, role } : item));
-                                const selectedItem = activeReferencePack.find((item) => item.id === id || item.nodeId === id);
-                                return selectedItem ? mergeReferencePackItems([...prev, { ...selectedItem, role }]) : prev;
-                            });
-                        }}
-                        onAddReferencePackItem={(item) => {
-                            updateReferencePack((prev) => mergeReferencePackItems([...prev, item]));
-                            onSelectNodeIds(new Set([...Array.from(selectedNodeIds), item.nodeId]));
-                        }}
-                        modelCosts={modelCosts}
+                {panelMode === "local-agent" ? (
+                    <CanvasLocalAgentPanel
+                        snapshot={agentSnapshot}
+                        canUndoOps={canUndoAgentOps}
+                        embedded
+                        panelMode={panelMode}
+                        onPanelModeChange={onPanelModeChange}
+                        onApplyOps={onApplyAgentOps}
+                        onUndoOps={onUndoAgentOps}
                     />
-                ) : null}
+                ) : (
+                    <>
+                        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                            {view === "history" ? (
+                                <AssistantHistory
+                                    sessions={historySessions}
+                                    activeSession={activeSession}
+                                    checkedIds={checkedChatIds.filter((id) => historySessions.some((session) => session.id === id))}
+                                    onToggleChecked={(id, checked) => setCheckedChatIds((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)))}
+                                    onOpen={(id) => {
+                                        setLocalActiveSessionId(id);
+                                        setView("chat");
+                                    }}
+                                    onDelete={(id) => setDeleteChatIds([id])}
+                                />
+                            ) : messages.length ? (
+                                <AssistantMessages messages={messages} taskQueue={sharedTaskQueue} chainEvents={sharedChainEvents} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onExecuteDirectorWorkflow={executeDirectorMessage} onHandoffDirectorWorkflowToAgent={handoffDirectorMessageToAgent} />
+                            ) : (
+                                <div className="flex h-full flex-col items-center justify-center px-1 text-center">
+                                    <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
+                                        <span>共生画布</span>
+                                        <DiaTextReveal className="absolute inset-0" colors={["#e9c176", "#fff1c4", "#a98f51"]} textColor="transparent" duration={1.8} startOnView={false} text="共生画布" />
+                                    </div>
+                                    <div className="mt-3 font-serif text-base italic opacity-60">人与 AI 彼此创世，彼此成就。</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {view === "chat" ? (
+                            <AssistantComposer
+                                mode={mode}
+                                prompt={prompt}
+                                isRunning={hasRunningTasks}
+                                references={selectedReferences}
+                                referencePack={activeReferencePack}
+                                config={assistantConfig}
+                                onModeChange={setMode}
+                                onPromptChange={setPrompt}
+                                onSubmit={submit}
+                                onConfigChange={(key, value) => updateConfig(key === "count" ? "canvasImageCount" : key, value)}
+                                onMissingConfig={() => openConfigDialog(true)}
+                                onRemoveReference={(id) => {
+                                    setRemovedReferenceIds((prev) => new Set(prev).add(id));
+                                    updateReferencePack((prev) => prev.filter((item) => item.nodeId !== id));
+                                    if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
+                                }}
+                                onPasteImage={onPasteImage}
+                                onAttachReferenceFile={onAttachReferenceFile}
+                                onReferenceRoleChange={(id, role) => {
+                                    updateReferencePack((prev) => {
+                                        const hasItem = prev.some((item) => item.id === id || item.nodeId === id);
+                                        if (hasItem) return prev.map((item) => (item.id === id || item.nodeId === id ? { ...item, role } : item));
+                                        const selectedItem = activeReferencePack.find((item) => item.id === id || item.nodeId === id);
+                                        return selectedItem ? mergeReferencePackItems([...prev, { ...selectedItem, role }]) : prev;
+                                    });
+                                }}
+                                onAddReferencePackItem={(item) => {
+                                    updateReferencePack((prev) => mergeReferencePackItems([...prev, item]));
+                                    onSelectNodeIds(new Set([...Array.from(selectedNodeIds), item.nodeId]));
+                                }}
+                                modelCosts={modelCosts}
+                            />
+                        ) : null}
+                    </>
+                )}
 
                 <Modal
                     title="删除对话记录？"
@@ -702,14 +729,19 @@ function PanelModeSwitch({ value, theme, onChange }: { value: CanvasControlPanel
 function DirectorSharedContextSummary({
     theme,
     summary,
+    activeMode,
+    workflowQueueSummary,
 }: {
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    summary: { nodes: number; references: number; assets: number; queue: number; ready: number; running: number };
+    summary: { nodes: number; references: number; assets: number; workflows: number; queue: number; ready: number; running: number };
+    activeMode: CanvasControlPanelMode;
+    workflowQueueSummary: ReturnType<typeof buildDirectorWorkflowQueueSummary>;
 }) {
     const items = [
         { label: "节点", value: summary.nodes },
         { label: "参考", value: summary.references },
         { label: "素材", value: summary.assets },
+        { label: "工作流", value: summary.workflows },
         { label: "队列", value: summary.queue },
     ];
     return (
@@ -722,11 +754,35 @@ function DirectorSharedContextSummary({
                 ))}
                 {summary.running ? <span className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: "rgba(217,119,6,.45)", color: "#d97706" }}>运行中 {summary.running}</span> : null}
             </div>
-            <div className="mt-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
-                导演台负责故事板、一致性和任务依赖；本地 Agent 读取同一份上下文执行画布操作。
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
+                <span>{activeMode === "director" ? "当前：导演规划链路" : "当前：本地 Agent 执行链路"}</span>
+                <span>导演台负责故事板、一致性和任务依赖；本地 Agent 读取同一份上下文执行画布操作。</span>
             </div>
+            {workflowQueueSummary.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                    {workflowQueueSummary.slice(0, 4).map((workflow) => (
+                        <span key={workflow.workflowId} className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: workflowQueueStateColor(workflow.state), color: theme.node.text }}>
+                            {workflow.title} · {workflow.total} 步 · {workflowQueueStateLabel(workflow.state)}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
+}
+
+function workflowQueueStateLabel(state: ReturnType<typeof buildDirectorWorkflowQueueSummary>[number]["state"]) {
+    if (state === "running") return "执行中";
+    if (state === "done") return "完成";
+    if (state === "error") return "失败";
+    return "计划";
+}
+
+function workflowQueueStateColor(state: ReturnType<typeof buildDirectorWorkflowQueueSummary>[number]["state"]) {
+    if (state === "running") return "#8c7aff";
+    if (state === "done") return "#2f9e75";
+    if (state === "error") return "#dc2626";
+    return "#d9a74f";
 }
 
 function SettingTitle({ children, color }: { children: string; color: string }) {
@@ -743,6 +799,8 @@ function qualityLabel(value: string) {
 
 function AssistantMessages({
     messages,
+    taskQueue,
+    chainEvents,
     onRetry,
     onInsertImage,
     onInsertText,
@@ -750,6 +808,8 @@ function AssistantMessages({
     onHandoffDirectorWorkflowToAgent,
 }: {
     messages: CanvasAssistantMessage[];
+    taskQueue: CanvasAgentTaskQueueItem[];
+    chainEvents: AIChainEvent[];
     onRetry: (message: CanvasAssistantMessage) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
@@ -772,8 +832,13 @@ function AssistantMessages({
                                 {message.mode === "director" ? "导演工作流" : "回答"}
                             </div>
                         ) : null}
-                        {message.text}
+                        {message.directorWorkflow ? (
+                            <DirectorWorkflowBrief message={message} theme={theme} />
+                        ) : (
+                            message.text
+                        )}
                     </div>
+                    {message.directorWorkflow ? <DirectorWorkflowChainCard message={message} taskQueue={taskQueue} chainEvents={chainEvents} theme={theme} /> : null}
                     {message.references?.length ? <MessageReferences message={message} /> : null}
                     {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : message.mode === "director" ? "正在推演工作流" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
@@ -882,6 +947,216 @@ function AssistantReferenceChip({ item, label, onRemove }: { item: CanvasAssista
             ) : null}
         </div>
     );
+}
+
+function DirectorWorkflowBrief({ message, theme }: { message: CanvasAssistantMessage; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const workflow = message.directorWorkflow;
+    if (!workflow) return null;
+    return (
+        <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.18em] opacity-60">链路摘要</div>
+            <div className="text-sm leading-6">{workflow.title}</div>
+            <div className="text-xs leading-5 opacity-80">{workflow.summary}</div>
+            <div className="flex flex-wrap gap-1.5 text-[11px] leading-4 opacity-70">
+                <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5" style={{ borderColor: theme.node.stroke }}>
+                    <GitBranch className="size-3" />
+                    {workflow.steps.length} 步
+                </span>
+                {message.directorMaterialization ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5" style={{ borderColor: theme.node.stroke }}>
+                        <CheckCircle2 className="size-3" />
+                        已物化
+                    </span>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function DirectorWorkflowChainCard({ message, taskQueue, chainEvents, theme }: { message: CanvasAssistantMessage; taskQueue: CanvasAgentTaskQueueItem[]; chainEvents: AIChainEvent[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const workflow = message.directorWorkflow;
+    if (!workflow) return null;
+    const queueByStepId = new Map(taskQueue.filter((item) => item.workflowId === workflow.id && item.stepId).map((item) => [item.stepId!, item]));
+    const workflowQueue = taskQueue.filter((item) => item.workflowId === workflow.id);
+    const steps = workflow.steps.map((step, index) => ({
+        index: index + 1,
+        title: step.title,
+        mode: step.mode,
+        prompt: step.prompt,
+        dependsOn: step.dependsOn || [],
+        runState: queueByStepId.get(step.id)?.runState || (step.mode === "note" ? "done" : "planned"),
+    }));
+    const materialization = message.directorMaterialization;
+    const statusSummary = summarizeDirectorStepStates(steps.map((step) => step.runState));
+    const workflowEvents = chainEvents.filter((event) => event.workflowId === workflow.id);
+    const createdNodes = workflowEvents.filter((event) => event.type === "create_node");
+    const connectedEdges = workflowEvents.filter((event) => event.type === "connect_nodes");
+    return (
+        <div className="w-full max-w-[88%] rounded-2xl border px-3 py-3" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-xs font-medium uppercase tracking-[0.18em] opacity-60">链路可视化</div>
+                <div className="text-[11px] opacity-60">
+                    {materialization ? `${materialization.nodeIds.length} 节点 · ${materialization.connectionIds.length} 连线` : "等待物化"}
+                </div>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-1.5 text-[11px] leading-4 opacity-80">
+                {createdNodes.length ? <span className="rounded-full border px-2 py-0.5" style={{ borderColor: theme.node.stroke }}>创建节点 {createdNodes.length}：{createdNodes.slice(0, 3).map((event) => event.title.replace(/^创建节点：/, "")).join(" / ")}</span> : null}
+                {connectedEdges.length ? <span className="rounded-full border px-2 py-0.5" style={{ borderColor: theme.node.stroke }}>连线 {connectedEdges.length}</span> : null}
+                {workflowQueue.length ? <span className="rounded-full border px-2 py-0.5" style={{ borderColor: theme.node.stroke }}>并发队列 {workflowQueue.length}</span> : null}
+            </div>
+            <DirectorWorkflowStatusRail summary={statusSummary} />
+            <AIChainTimeline events={workflowEvents} />
+            <div className="relative pl-5">
+                <div className="absolute bottom-0 left-2 top-1 w-px bg-current/15" />
+                <div className="space-y-2.5">
+                    <DirectorWorkflowChainNode title="用户主题" text={workflow.sourcePrompt} tone="root" />
+                    {workflow.references.length ? (
+                        <DirectorWorkflowChainNode title="外部参考" text={workflow.references.map((item) => item.title).join(" / ")} tone="reference" />
+                    ) : null}
+                    {steps.map((step) => (
+                        <DirectorWorkflowChainNode
+                            key={step.index}
+                            title={`${step.index}. ${step.title}`}
+                            text={step.prompt}
+                            tone={step.mode === "note" ? "note" : step.mode}
+                            detail={step.dependsOn.length ? `依赖：${step.dependsOn.join("、")}` : undefined}
+                            runState={step.runState}
+                        />
+                    ))}
+                    <DirectorWorkflowChainNode
+                        title="执行状态"
+                        text={message.directorRunReport ? `已执行 ${message.directorRunReport.executedCount}，跳过 ${message.directorRunReport.skippedCount}，失败 ${message.directorRunReport.failedCount}` : materialization ? "已物化到画布，等待执行" : "等待物化"}
+                        tone="status"
+                        runState={message.directorRunReport?.failedCount ? "error" : message.directorRunReport ? "done" : materialization ? "ready" : "planned"}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DirectorWorkflowStatusRail({ summary }: { summary: Record<DirectorRunState, number> }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const items: Array<{ state: DirectorRunState; label: string }> = [
+        { state: "planned", label: "计划" },
+        { state: "ready", label: "就绪" },
+        { state: "running", label: "执行中" },
+        { state: "done", label: "完成" },
+        { state: "error", label: "失败" },
+    ];
+    return (
+        <div className="mb-3 grid grid-cols-5 gap-1.5">
+            {items.map((item) => (
+                <div key={item.state} className="rounded-lg border px-2 py-1.5 text-center" style={{ borderColor: stateColor(item.state), background: theme.node.fill }}>
+                    <div className="text-[10px] leading-4 opacity-60">{item.label}</div>
+                    <div className="text-sm font-semibold leading-5">{summary[item.state] || 0}</div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function AIChainTimeline({ events }: { events: AIChainEvent[] }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    if (!events.length) {
+        return (
+            <div className="mb-3 rounded-xl border px-3 py-2 text-[11px] leading-5 opacity-60" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+                暂无事件，等待 AI 开始规划或执行。
+            </div>
+        );
+    }
+    return (
+        <div className="mb-3 space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] opacity-60">AI 时间轴</div>
+            <div className="space-y-1.5">
+                {events.slice(-10).map((event) => (
+                    <div key={event.id} className="flex gap-2 rounded-xl border px-2.5 py-2" style={{ borderColor: eventStateColor(event.state), background: theme.node.fill }}>
+                        <div className="mt-1 size-2.5 shrink-0 rounded-full" style={{ background: eventStateColor(event.state) }} />
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+                                <span>{event.title}</span>
+                                <span className="rounded-full border px-1.5 py-0.5 text-[10px]" style={{ borderColor: eventStateColor(event.state), color: eventStateColor(event.state) }}>{eventStateLabel(event.state)}</span>
+                                <span className="rounded-full border px-1.5 py-0.5 text-[10px]" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>{event.actor === "director" ? "导演台" : event.actor === "local-agent" ? "本地 Agent" : event.actor}</span>
+                            </div>
+                            <div className="mt-1 text-[11px] leading-5 opacity-80">{event.summary}</div>
+                            {event.detail ? <div className="mt-1 text-[10px] leading-4 opacity-60">{event.detail}</div> : null}
+                            <div className="mt-1 flex flex-wrap gap-1 text-[10px] opacity-50">
+                                <span>{event.type}</span>
+                                {event.nodeId ? <span>节点 {event.nodeId}</span> : null}
+                                {event.connectionId ? <span>连线 {event.connectionId}</span> : null}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+type DirectorRunState = "planned" | "ready" | "running" | "done" | "error";
+
+function summarizeDirectorStepStates(states: Array<DirectorRunState | undefined>) {
+    return states.reduce<Record<DirectorRunState, number>>(
+        (acc, state) => {
+            acc[state || "planned"] += 1;
+            return acc;
+        },
+        { planned: 0, ready: 0, running: 0, done: 0, error: 0 },
+    );
+}
+
+function DirectorWorkflowChainNode({ title, text, detail, tone, runState }: { title: string; text: string; detail?: string; tone: "root" | "reference" | CanvasGenerationMode | "note" | "status"; runState?: DirectorRunState }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const accent = tone === "image" ? "#d9a74f" : tone === "video" ? "#8c7aff" : tone === "audio" ? "#4db6ac" : tone === "text" || tone === "note" ? "#7aa2f7" : tone === "reference" ? "#b38f5a" : tone === "status" ? "#7c8aa5" : theme.node.activeStroke;
+    const state = runState || (tone === "root" || tone === "reference" ? "done" : "planned");
+    return (
+        <div className="relative rounded-xl border px-3 py-2" style={{ borderColor: `color-mix(in srgb, ${accent} 40%, ${theme.node.stroke})`, background: theme.node.fill }}>
+            <div className="absolute -left-3 top-3 h-2.5 w-2.5 rounded-full border-2" style={{ background: stateColor(state), borderColor: theme.node.panel }} />
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                        <span>{title}</span>
+                        {tone === "root" ? <span className="rounded-full px-1.5 py-0.5 text-[10px] uppercase tracking-[0.18em]" style={{ background: accent, color: theme.node.panel }}>起点</span> : null}
+                        <span className="rounded-full border px-1.5 py-0.5 text-[10px]" style={{ borderColor: stateColor(state), color: stateColor(state) }}>{stateLabel(state)}</span>
+                    </div>
+                    <div className="mt-1 text-[11px] leading-5 opacity-80">{text}</div>
+                    {detail ? <div className="mt-1 text-[10px] leading-4 opacity-60">{detail}</div> : null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function stateLabel(state: DirectorRunState) {
+    if (state === "ready") return "就绪";
+    if (state === "running") return "执行中";
+    if (state === "done") return "完成";
+    if (state === "error") return "失败";
+    return "计划";
+}
+
+function stateColor(state: DirectorRunState) {
+    if (state === "ready") return "#d9a74f";
+    if (state === "running") return "#8c7aff";
+    if (state === "done") return "#2f9e75";
+    if (state === "error") return "#dc2626";
+    return "#7c8aa5";
+}
+
+function eventStateLabel(state: AIChainEventState) {
+    if (state === "waiting") return "就绪";
+    if (state === "running") return "执行中";
+    if (state === "done") return "完成";
+    if (state === "error") return "失败";
+    return "计划";
+}
+
+function eventStateColor(state: AIChainEventState) {
+    if (state === "waiting") return "#d9a74f";
+    if (state === "running") return "#8c7aff";
+    if (state === "done") return "#2f9e75";
+    if (state === "error") return "#dc2626";
+    return "#7c8aa5";
 }
 
 function DirectorReferencePackChip({

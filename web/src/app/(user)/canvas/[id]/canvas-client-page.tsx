@@ -27,7 +27,6 @@ import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-conne
 import { CanvasConfigComposer } from "../components/canvas-config-composer";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
 import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
-import { CanvasLocalAgentPanel } from "../components/canvas-local-agent-panel";
 import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "../components/canvas-node-crop-dialog";
@@ -47,6 +46,7 @@ import { useCanvasStore } from "../stores/use-canvas-store";
 import { useCanvasAgentStore } from "../stores/use-canvas-agent-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
 import { applyCanvasAgentOps, type CanvasAgentAssetPackItem, type CanvasAgentOp, type CanvasAgentSnapshot, type CanvasAgentTaskQueueItem } from "../utils/canvas-agent-ops";
+import { buildDirectorWorkflowChainEvents } from "../utils/ai-chain-events";
 import { buildDirectorAgentHandoffPrompt } from "../director/agent-handoff";
 import { createDirectorReferencePackItemFromNode } from "../director/reference-pack";
 import { materializeDirectorWorkflow } from "../director/workflow-materializer";
@@ -418,6 +418,7 @@ function InfiniteCanvasPage() {
             viewport: viewportRef.current,
             assetPack: buildAgentAssetPack(nodesRef.current, sharedReferencePack, savedAssets),
             taskQueue: buildAgentTaskQueue(nodesRef.current, connectionsRef.current),
+            chainEvents: buildCanvasChainEvents(nodesRef.current, connectionsRef.current),
         }),
         [currentProject?.title, projectId, savedAssets, sharedReferencePack],
     );
@@ -763,6 +764,7 @@ function InfiniteCanvasPage() {
             viewport,
             assetPack: buildAgentAssetPack(nodes, sharedReferencePack, savedAssets),
             taskQueue: buildAgentTaskQueue(nodes, connections),
+            chainEvents: buildCanvasChainEvents(nodes, connections),
         }),
         [connections, currentProject?.title, nodes, projectId, savedAssets, selectedNodeIds, sharedReferencePack, viewport],
     );
@@ -2961,22 +2963,14 @@ function InfiniteCanvasPage() {
                     onSharedReferencePackChange={setSharedReferencePack}
                     sharedAssetPack={agentSnapshot.assetPack}
                     sharedTaskQueue={agentSnapshot.taskQueue}
+                    sharedChainEvents={agentSnapshot.chainEvents}
                     panelMode={assistantPanelMode}
                     onPanelModeChange={setAssistantPanelMode}
+                    agentSnapshot={agentSnapshot}
+                    canUndoAgentOps={Boolean(agentUndoSnapshot)}
+                    onApplyAgentOps={applyAgentOps}
+                    onUndoAgentOps={undoAgentOps}
                     hidden={assistantCollapsed}
-                    onCollapseStart={() => setAssistantCollapsed(true)}
-                    onCollapse={() => setAssistantMounted(false)}
-                />
-            ) : null}
-            {assistantMounted ? (
-                <CanvasLocalAgentPanel
-                    snapshot={agentSnapshot}
-                    canUndoOps={Boolean(agentUndoSnapshot)}
-                    collapsed={assistantCollapsed}
-                    panelMode={assistantPanelMode}
-                    onPanelModeChange={setAssistantPanelMode}
-                    onApplyOps={applyAgentOps}
-                    onUndoOps={undoAgentOps}
                     onCollapseStart={() => setAssistantCollapsed(true)}
                     onCollapse={() => setAssistantMounted(false)}
                 />
@@ -3452,6 +3446,22 @@ function buildAgentTaskQueue(nodes: CanvasNodeData[], connections: CanvasConnect
             } satisfies CanvasAgentTaskQueueItem;
         })
         .sort((first, second) => (first.plannedOrder ?? -1) - (second.plannedOrder ?? -1));
+}
+
+function buildCanvasChainEvents(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const workflowIds = Array.from(new Set(nodes.map((node) => node.metadata?.director?.workflowId).filter((workflowId): workflowId is string => Boolean(workflowId))));
+    return workflowIds.flatMap((workflowId) => {
+        const workflowNodes = nodes.filter((node) => node.metadata?.director?.workflowId === workflowId);
+        const workflowNodeIds = new Set(workflowNodes.map((node) => node.id));
+        const workflowConnections = connections.filter((connection) => workflowNodeIds.has(connection.fromNodeId) && workflowNodeIds.has(connection.toNodeId));
+        const inputNode = workflowNodes.find((node) => node.metadata?.director?.role === "input");
+        return buildDirectorWorkflowChainEvents({
+            workflowId,
+            workflowTitle: inputNode?.title || workflowNodes[0]?.title || "导演工作流",
+            nodes: workflowNodes,
+            connections: workflowConnections,
+        });
+    });
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -20,6 +20,27 @@ export enum CanvasNodeType {
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
+export type AIChainEventType = "thinking" | "plan" | "create_node" | "update_node" | "connect_nodes" | "run_generation" | "read_result" | "verify" | "handoff" | "error";
+export type AIChainEventState = "planned" | "running" | "done" | "error" | "waiting";
+export type AIChainEventActor = "director" | "local-agent" | "system" | "user";
+
+export type AIChainEvent = {
+    id: string;
+    workflowId: string;
+    parentId?: string;
+    stepId?: string;
+    nodeId?: string;
+    connectionId?: string;
+    actor: AIChainEventActor;
+    type: AIChainEventType;
+    state: AIChainEventState;
+    title: string;
+    summary: string;
+    detail?: string;
+    createdAt: string;
+    startedAt?: string;
+    finishedAt?: string;
+};
 
 export type CanvasNodeMetadata = {
     content?: string;

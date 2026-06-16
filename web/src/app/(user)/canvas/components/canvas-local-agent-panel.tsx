@@ -80,6 +80,8 @@ export function CanvasLocalAgentPanel({
     const endpoint = useMemo(() => url.trim().replace(/\/$/, ""), [url]);
     const sharedContext = useMemo(() => {
         const queue = snapshot.taskQueue || [];
+        const chainEvents = snapshot.chainEvents || [];
+        const latestEvent = chainEvents.length ? chainEvents[chainEvents.length - 1] : null;
         return {
             nodes: snapshot.nodes.length,
             connections: snapshot.connections.length,
@@ -90,6 +92,8 @@ export function CanvasLocalAgentPanel({
             running: queue.filter((item) => item.runState === "running").length,
             done: queue.filter((item) => item.runState === "done").length,
             error: queue.filter((item) => item.runState === "error").length,
+            events: chainEvents.length,
+            latestEvent: latestEvent?.summary || "",
         };
     }, [snapshot]);
     const loadThreads = useCallback(async () => {
@@ -204,7 +208,7 @@ export function CanvasLocalAgentPanel({
         const text = prompt.trim();
         const files = attachments;
         const requestPrompt = promptWithAttachments(text, files);
-        if (!connected || !requestPrompt || sending || waiting) return;
+        if (!connected || !requestPrompt || sending) return;
         if (attachmentPayloadBytes(files) > MAX_ATTACHMENT_PAYLOAD_BYTES) {
             addMessage({ role: "error", title: "图片过大", text: "图片附件超过 30MB，请删减后再发送。" });
             return;
@@ -504,22 +508,25 @@ export function CanvasLocalAgentPanel({
 
     const content = (
         <>
-            <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
-                <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                        <Sparkles className="size-4 shrink-0" />
-                        <span className="truncate">创作控制台</span>
+            {!embedded ? (
+                <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                            <Sparkles className="size-4 shrink-0" />
+                            <span className="truncate">创作控制台</span>
+                        </div>
+                        {onPanelModeChange ? <PanelModeSwitch value={panelMode} theme={theme} onChange={onPanelModeChange} /> : null}
                     </div>
-                    {onPanelModeChange ? <PanelModeSwitch value={panelMode} theme={theme} onChange={onPanelModeChange} /> : null}
+                    <Tooltip title="收起控制台">
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={{ color: theme.node.muted }} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
+                    </Tooltip>
                 </div>
-                <Tooltip title="收起控制台">
-                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={{ color: theme.node.muted }} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
-                </Tooltip>
-            </div>
+            ) : null}
             <AgentSharedContextSummary
                 theme={theme}
                 stats={sharedContext}
                 agentProvider={agentProvider}
+                compact={embedded}
                 onAgentProviderChange={(nextProvider) => setAgentState({ agentProvider: nextProvider })}
             />
             <AgentPanelTabs
@@ -588,12 +595,12 @@ export function CanvasLocalAgentPanel({
                         {pendingTool ? <AgentPendingToolCard summary={summarizeCanvasAgentOps(pendingTool.input?.ops || []) || toolName(pendingTool.name)} detail={{ requestId: pendingTool.requestId, name: pendingTool.name, input: pendingTool.input }} theme={theme} onReject={rejectPendingTool} onApprove={approvePendingTool} /> : null}
                         {waiting && !pendingTool ? <AgentWorkingMessage theme={theme} /> : null}
                     </div>
-                    <AgentChatComposer
-                        prompt={prompt}
-                        attachments={attachments.map(agentAttachmentToChatAttachment)}
-                        disabled={!connected}
-                        sending={sending || waiting}
-                        placeholder="询问 Codex，或让它操作画布"
+                        <AgentChatComposer
+                            prompt={prompt}
+                            attachments={attachments.map(agentAttachmentToChatAttachment)}
+                            disabled={!connected}
+                            sending={sending}
+                            placeholder="询问 Codex，或让它操作画布"
                         theme={theme}
                         onPromptChange={(prompt) => setAgentState({ prompt })}
                         onSubmit={sendPrompt}
@@ -676,11 +683,13 @@ function AgentSharedContextSummary({
     theme,
     stats,
     agentProvider,
+    compact = false,
     onAgentProviderChange,
 }: {
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    stats: { nodes: number; connections: number; selected: number; assets: number; queue: number; ready: number; running: number; done: number; error: number };
+    stats: { nodes: number; connections: number; selected: number; assets: number; queue: number; ready: number; running: number; done: number; error: number; events: number; latestEvent: string };
     agentProvider: AgentProvider;
+    compact?: boolean;
     onAgentProviderChange: (provider: AgentProvider) => void;
 }) {
     const items = [
@@ -689,9 +698,10 @@ function AgentSharedContextSummary({
         { label: "选中", value: stats.selected },
         { label: "素材", value: stats.assets },
         { label: "队列", value: stats.queue },
+        { label: "事件", value: stats.events },
     ];
     return (
-        <div className="border-b px-4 py-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+        <div className={compact ? "border-b px-3 py-2" : "border-b px-4 py-2.5"} style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
             <div className="flex flex-wrap items-center gap-1.5">
                 {items.map((item) => (
                     <span key={item.label} className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
@@ -700,7 +710,7 @@ function AgentSharedContextSummary({
                 ))}
                 {stats.running ? <span className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: "rgba(217,119,6,.45)", color: "#d97706" }}>运行中 {stats.running}</span> : null}
                 {stats.error ? <span className="rounded-full border px-2 py-0.5 text-[11px] leading-4" style={{ borderColor: "rgba(220,38,38,.45)", color: "#dc2626" }}>异常 {stats.error}</span> : null}
-                <div className="ml-auto flex items-center gap-2">
+                <div className={compact ? "ml-auto flex items-center gap-2" : "ml-auto flex items-center gap-2"}>
                     <span className="text-[11px] leading-4" style={{ color: theme.node.muted }}>
                         本地 Agent
                     </span>
@@ -718,6 +728,7 @@ function AgentSharedContextSummary({
             <div className="mt-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
                 本地 Agent 读取同一份画布、客户素材包和导演任务队列。
             </div>
+            {stats.latestEvent ? <div className="mt-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>最近事件：{stats.latestEvent}</div> : null}
         </div>
     );
 }
@@ -999,6 +1010,8 @@ function toolName(name: string) {
     if (name === "canvas_get_selection") return "读取选区";
     if (name === "canvas_get_asset_pack") return "读取素材包";
     if (name === "canvas_get_task_queue") return "读取任务队列";
+    if (name === "canvas_get_chain_events") return "读取事件流";
+    if (name === "canvas_get_director_workflows") return "读取导演工作流";
     if (name === "canvas_export_snapshot") return "导出快照";
     if (name === "canvas_create_node") return "创建节点";
     if (name === "canvas_create_text_node") return "创建文本";
@@ -1006,6 +1019,7 @@ function toolName(name: string) {
     if (name === "canvas_create_config_node") return "创建生成配置";
     if (name === "canvas_create_image_prompt_flow") return "创建生图流程";
     if (name === "canvas_create_generation_flow") return "创建生成流程";
+    if (name === "canvas_create_director_workflow") return "创建导演工作流";
     if (name === "canvas_generate_text") return "生成文本";
     if (name === "canvas_generate_image") return "生成图片";
     if (name === "canvas_generate_video") return "生成视频";
@@ -1023,7 +1037,7 @@ function toolName(name: string) {
 }
 
 function isReadTool(name: string) {
-    return name === "canvas_get_state" || name === "canvas_get_selection" || name === "canvas_get_asset_pack" || name === "canvas_get_task_queue" || name === "canvas_export_snapshot";
+    return name === "canvas_get_state" || name === "canvas_get_selection" || name === "canvas_get_asset_pack" || name === "canvas_get_task_queue" || name === "canvas_get_chain_events" || name === "canvas_get_director_workflows" || name === "canvas_export_snapshot";
 }
 
 function agentName(event: AgentEventPayload) {

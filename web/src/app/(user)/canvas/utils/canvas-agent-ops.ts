@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { getNodeSpec } from "../constants";
-import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type ViewportTransform } from "../types";
+import { CanvasNodeType, type AIChainEvent, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type ViewportTransform } from "../types";
 
 export type CanvasAgentAssetPackItem = {
     id: string;
@@ -55,6 +55,7 @@ export type CanvasAgentSnapshot = {
     viewport: ViewportTransform;
     assetPack: CanvasAgentAssetPackItem[];
     taskQueue: CanvasAgentTaskQueueItem[];
+    chainEvents: AIChainEvent[];
 };
 
 export function summarizeCanvasAgentOps(ops?: CanvasAgentOp[]) {

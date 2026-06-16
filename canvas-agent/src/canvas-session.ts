@@ -3,7 +3,7 @@ import type { ServerResponse } from "node:http";
 
 import { type ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
-import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
+import type { CanvasDirectorWorkflowSummary, CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 
@@ -48,7 +48,7 @@ export class CanvasSession {
         if (!isToolName(name)) throw new Error(`未知工具：${String(name)}`);
         let tool: ToolName = name;
         let input = parseToolInput(tool, rawInput) as Record<string, unknown>;
-        const readTool = ["canvas_get_state", "canvas_get_selection", "canvas_get_asset_pack", "canvas_get_task_queue", "canvas_export_snapshot"].includes(tool);
+        const readTool = ["canvas_get_state", "canvas_get_selection", "canvas_get_asset_pack", "canvas_get_task_queue", "canvas_get_chain_events", "canvas_get_director_workflows", "canvas_export_snapshot"].includes(tool);
         if (readTool && (!this.clients.size || !this.canvasState)) throw new Error("当前没有已连接画布");
         if (tool === "canvas_get_state" || tool === "canvas_export_snapshot") return compactCanvasState(this.canvasState);
         if (tool === "canvas_get_selection") {
@@ -57,6 +57,8 @@ export class CanvasSession {
         }
         if (tool === "canvas_get_asset_pack") return { assetPack: this.canvasState?.assetPack || [] };
         if (tool === "canvas_get_task_queue") return { taskQueue: this.canvasState?.taskQueue || [] };
+        if (tool === "canvas_get_chain_events") return { chainEvents: this.canvasState?.chainEvents || [] };
+        if (tool === "canvas_get_director_workflows") return { workflows: summarizeDirectorWorkflows(this.canvasState) };
         if (tool === "canvas_create_node") {
             const data = input as { nodeType: CanvasNodeType; title?: string; x?: number; y?: number; width?: number; height?: number; metadata?: Record<string, unknown> };
             input = { ops: [{ type: "add_node", nodeType: data.nodeType, title: data.title, position: { x: data.x ?? nextCanvasX(this.canvasState), y: data.y ?? 0 }, width: data.width, height: data.height, metadata: data.metadata }] };
@@ -93,6 +95,10 @@ export class CanvasSession {
         }
         if (tool === "canvas_create_generation_flow") {
             input = { ops: generationFlowOps(input as Record<string, unknown>, this.canvasState) };
+            tool = "canvas_apply_ops";
+        }
+        if (tool === "canvas_create_director_workflow") {
+            input = { ops: directorWorkflowOps(input as Record<string, unknown>, this.canvasState) };
             tool = "canvas_apply_ops";
         }
         if (tool === "canvas_generate_text" || tool === "canvas_generate_image" || tool === "canvas_generate_video" || tool === "canvas_generate_audio") {
@@ -226,6 +232,84 @@ function generationFlowOps(input: Record<string, unknown>, state: CanvasSnapshot
     ];
 }
 
+function directorWorkflowOps(input: Record<string, unknown>, state: CanvasSnapshot | null) {
+    const prompt = String(input.prompt || "");
+    const x = Number(input.x ?? nextCanvasX(state));
+    const y = Number(input.y ?? 0);
+    const title = String(input.title || "大型导演工作流");
+    const workflowId = `director-${crypto.randomUUID()}`;
+    const steps: Array<{ id: string; title: string; mode: "text" | "image" | "video"; prompt: string; dependsOn: string[] }> = [
+        { id: "brief", title: "主题拆解", mode: "text", prompt: `请把用户主题拆解成创意简报。\n\n用户主题：${prompt}`, dependsOn: [] },
+        { id: "visual-bible", title: "视觉圣经", mode: "text", prompt: `基于主题拆解，建立视觉圣经。\n\n主题：${prompt}`, dependsOn: ["brief"] },
+        { id: "hero-image", title: "首图主视觉", mode: "image", prompt: `生成项目第一张主视觉图。\n\n主题：${prompt}`, dependsOn: ["visual-bible"] },
+        { id: "consistency-lock", title: "产品一致性", mode: "image", prompt: `以上一步主视觉作为锚点，锁定主体/产品一致性。\n\n主题：${prompt}`, dependsOn: ["hero-image"] },
+        { id: "scene-wide", title: "场景远景", mode: "image", prompt: `基于一致性锁和主视觉扩展场景远景。\n\n主题：${prompt}`, dependsOn: ["consistency-lock"] },
+        { id: "scene-action", title: "动作关键帧", mode: "image", prompt: `基于场景远景生成动作关键帧。\n\n主题：${prompt}`, dependsOn: ["scene-wide"] },
+        { id: "detail-shots", title: "细节特写", mode: "image", prompt: `基于动作关键帧生成细节特写。\n\n主题：${prompt}`, dependsOn: ["scene-action"] },
+        { id: "asset-storyboard", title: "资产故事板", mode: "text", prompt: `读取前面所有节点结果，重写资产故事板，保持人物、主体、产品、物品和场景一致。\n\n主题：${prompt}`, dependsOn: ["brief", "visual-bible", "hero-image", "consistency-lock", "scene-wide", "scene-action", "detail-shots"] },
+        { id: "video-segment-a", title: "视频片段A", mode: "video", prompt: `根据故事板生成片段A，写清首帧、尾帧、镜头运动和一致性要求。\n\n主题：${prompt}`, dependsOn: ["asset-storyboard", "hero-image", "scene-wide", "scene-action"] },
+        { id: "video-segment-b", title: "视频片段B", mode: "video", prompt: `根据故事板生成片段B，承接片段A并保持同一产品、场景和光线。\n\n主题：${prompt}`, dependsOn: ["asset-storyboard", "consistency-lock", "scene-action", "detail-shots"] },
+        { id: "edit-plan", title: "剪辑缺片", mode: "text", prompt: `读取故事板、视频片段和上游图片，输出剪辑方案、缺失片段、未完整成片标记和补生成提示词。\n\n主题：${prompt}`, dependsOn: ["asset-storyboard", "video-segment-a", "video-segment-b", "detail-shots"] },
+        { id: "final-review", title: "导演审校", mode: "text", prompt: `对整个工作流做最终审校，列出一致性风险、返工节点和可复制返工提示词。\n\n主题：${prompt}`, dependsOn: ["edit-plan"] },
+    ];
+    const inputId = `director-input-${crypto.randomUUID()}`;
+    const nodeIdByStepId = new Map(steps.map((step) => [step.id, `director-${step.mode}-${crypto.randomUUID()}`]));
+    const nodeOps = [
+        {
+            type: "add_node",
+            id: inputId,
+            nodeType: "text",
+            title,
+            position: { x, y },
+            metadata: { content: `# ${title}\n\n${prompt}`, prompt, status: "success", fontSize: 14, director: { workflowId, role: "input", runState: "done" } },
+        },
+        ...steps.map((step, index) => {
+            const dependencyNodeIds = step.dependsOn.map((stepId) => nodeIdByStepId.get(stepId)).filter((id): id is string => Boolean(id));
+            const tokens = (dependencyNodeIds.length ? dependencyNodeIds : [inputId]).map((nodeId) => `@[node:${nodeId}]`).join(" ");
+            return {
+                type: "add_node",
+                id: nodeIdByStepId.get(step.id),
+                nodeType: "config",
+                title: step.title,
+                position: { x: x + 420 * (index + 1), y },
+                metadata: cleanRecord({
+                    content: "",
+                    prompt: step.prompt,
+                    composerContent: `${tokens}\n\n${step.prompt}`,
+                    status: "idle",
+                    generationMode: step.mode,
+                    model: input.model,
+                    size: input.size,
+                    quality: input.quality,
+                    count: input.count,
+                    seconds: input.seconds,
+                    vquality: input.vquality,
+                    generateAudio: input.generateAudio,
+                    watermark: input.watermark,
+                    audioVoice: input.audioVoice,
+                    audioFormat: input.audioFormat,
+                    audioSpeed: input.audioSpeed,
+                    audioInstructions: input.audioInstructions,
+                    director: { workflowId, stepId: step.id, role: "step", mode: step.mode, dependencyStepIds: step.dependsOn, plannedOrder: index + 1, runState: "ready" },
+                }),
+            };
+        }),
+    ];
+    const connectionOps = steps.flatMap((step) => {
+        const toNodeId = nodeIdByStepId.get(step.id);
+        if (!toNodeId) return [];
+        const parents = step.dependsOn.length ? step.dependsOn.map((stepId) => nodeIdByStepId.get(stepId)).filter((id): id is string => Boolean(id)) : [inputId];
+        return parents.map((fromNodeId) => ({ type: "connect_nodes", fromNodeId, toNodeId }));
+    });
+    const reviewId = nodeIdByStepId.get("final-review") || inputId;
+    return [
+        ...nodeOps,
+        ...connectionOps,
+        { type: "select_nodes", ids: [reviewId] },
+        ...(input.autoRun ? [{ type: "run_generation", nodeId: reviewId, mode: "text", prompt }] : []),
+    ];
+}
+
 function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string) {
     return { type: "run_generation", nodeId, mode, prompt };
 }
@@ -243,6 +327,46 @@ function generationTitle(mode: "text" | "image" | "video" | "audio") {
 
 function findNode(state: CanvasSnapshot | null, id: string): CanvasNode | undefined {
     return (state?.nodes || []).find((node) => node.id === id);
+}
+
+function summarizeDirectorWorkflows(state: CanvasSnapshot | null): CanvasDirectorWorkflowSummary[] {
+    const nodes = state?.nodes || [];
+    const taskQueue = state?.taskQueue || [];
+    const chainEvents = state?.chainEvents || [];
+    const workflowIds = Array.from(new Set(nodes.map((node) => directorMetadata(node)?.workflowId).filter((workflowId): workflowId is string => Boolean(workflowId))));
+    return workflowIds.map((workflowId) => {
+        const workflowNodes = nodes.filter((node) => directorMetadata(node)?.workflowId === workflowId);
+        const workflowQueue = taskQueue.filter((item) => item.workflowId === workflowId);
+        const workflowEvents = chainEvents.filter((event) => event.workflowId === workflowId);
+        const latestEvent = workflowEvents[workflowEvents.length - 1];
+        const planned = workflowQueue.filter((item) => item.runState === "planned" || item.runState === "ready").length;
+        const running = workflowQueue.filter((item) => item.runState === "running").length;
+        const done = workflowQueue.filter((item) => item.runState === "done").length;
+        const error = workflowQueue.filter((item) => item.runState === "error").length;
+        return {
+            workflowId,
+            title: workflowNodes.find((node) => directorMetadata(node)?.role === "input")?.title || workflowNodes[0]?.title || "导演工作流",
+            total: workflowQueue.length || workflowNodes.length,
+            planned,
+            running,
+            done,
+            error,
+            state: error ? "error" : running ? "running" : planned ? "planned" : "done",
+            latestEventTitle: latestEvent?.title,
+            latestEventSummary: latestEvent?.summary,
+            latestEventState: latestEvent?.state,
+        };
+    });
+}
+
+function directorMetadata(node: CanvasNode) {
+    const director = node.metadata?.director;
+    if (!director || typeof director !== "object" || Array.isArray(director)) return null;
+    const value = director as Record<string, unknown>;
+    return {
+        workflowId: typeof value.workflowId === "string" ? value.workflowId : undefined,
+        role: typeof value.role === "string" ? value.role : undefined,
+    };
 }
 
 function cleanRecord(value: Record<string, unknown>) {

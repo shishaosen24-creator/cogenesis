@@ -55,6 +55,7 @@ const snapshot = {
     selectedNodeIds: [],
     viewport: { x: 0, y: 0, k: 1 },
     assetPack,
+    chainEvents: [],
     taskQueue: [
         {
             id: "director-bridge-test:hero-image",
