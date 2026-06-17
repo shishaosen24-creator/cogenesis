@@ -3,8 +3,10 @@
 import { Drawer } from "antd";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRef } from "react";
 
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
+import { scheduleRoutePrefetch } from "@/lib/route-prefetch";
 import { cn } from "@/lib/utils";
 
 type MobileNavDrawerProps = {
@@ -15,8 +17,18 @@ type MobileNavDrawerProps = {
 
 export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDrawerProps) {
     const router = useRouter();
+    const cancelWarmRouteRef = useRef<(() => void) | null>(null);
     const warmRoute = (href: string) => {
-        void router.prefetch(href);
+        cancelWarmRouteRef.current?.();
+        cancelWarmRouteRef.current = scheduleRoutePrefetch(router, href);
+    };
+    const cancelWarmRoute = () => {
+        cancelWarmRouteRef.current?.();
+        cancelWarmRouteRef.current = null;
+    };
+    const closeAndCancel = () => {
+        cancelWarmRoute();
+        onClose();
     };
     return (
         <Drawer title="导航" placement="left" size={300} open={open} onClose={onClose} className="md:hidden">
@@ -33,9 +45,10 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                             key={tool.slug}
                             href={`/${tool.slug}`}
                             prefetch={false}
-                            onClick={onClose}
+                            onClick={closeAndCancel}
                             onMouseEnter={() => warmRoute(`/${tool.slug}`)}
                             onFocus={() => warmRoute(`/${tool.slug}`)}
+                            onMouseLeave={cancelWarmRoute}
                             className={cn(
                                 "flex items-center gap-3 rounded-md border px-3 py-3 text-base transition",
                                 active

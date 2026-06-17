@@ -31,7 +31,7 @@ export function PromptCard({
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     {item.coverUrl ? (
-                        <img src={item.coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+                        <img src={item.coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                     ) : (
                         <div className="sacred-empty-state flex aspect-[4/3] items-center justify-center px-5 text-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无封面</div>
                     )}

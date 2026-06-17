@@ -106,6 +106,7 @@ type ConfigStore = {
     config: AiConfig;
     webdav: WebdavSyncConfig;
     publicSettings: AdminPublicSettings | null;
+    publicSettingsError: string;
     isPublicSettingsLoading: boolean;
     isConfigOpen: boolean;
     shouldPromptContinue: boolean;
@@ -207,6 +208,7 @@ export const useConfigStore = create<ConfigStore>()(
             config: defaultConfig,
             webdav: defaultWebdavSyncConfig,
             publicSettings: null,
+            publicSettingsError: "",
             isPublicSettingsLoading: false,
             isConfigOpen: false,
             shouldPromptContinue: false,
@@ -228,7 +230,9 @@ export const useConfigStore = create<ConfigStore>()(
                 if (get().isPublicSettingsLoading) return;
                 set({ isPublicSettingsLoading: true });
                 try {
-                    set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
+                    set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings"), publicSettingsError: "" });
+                } catch (error) {
+                    set({ publicSettingsError: error instanceof Error ? error.message : "公共配置读取失败，已继续使用本地配置" });
                 } finally {
                     set({ isPublicSettingsLoading: false });
                 }

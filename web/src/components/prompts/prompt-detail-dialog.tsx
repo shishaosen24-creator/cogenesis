@@ -5,7 +5,9 @@ import { Button, Modal, Space, Tag } from "antd";
 
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 
-export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void }) {
+export type PromptDetailDialogProps = { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void };
+
+export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: PromptDetailDialogProps) {
     return (
         <>
             <Modal
@@ -25,7 +27,7 @@ export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { p
                     <div className="sacred-prompt-detail-body">
                         <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
                             <div className="space-y-3">
-                                {prompt.coverUrl ? <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" /> : <div className="sacred-empty-state flex aspect-[4/3] items-center justify-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无封面</div>}
+                                {prompt.coverUrl ? <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" loading="lazy" decoding="async" fetchPriority="low" /> : <div className="sacred-empty-state flex aspect-[4/3] items-center justify-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无封面</div>}
                                 {prompt.preview ? <pre className="sacred-panel-soft max-h-60 overflow-auto whitespace-pre-wrap p-3 text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">{prompt.preview}</pre> : null}
                             </div>
                             <div className="min-w-0">

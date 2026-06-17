@@ -1,17 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { FolderPlus, Inbox, RefreshCw, Search } from "lucide-react";
-import { type UIEvent, useEffect, useState } from "react";
+import { type UIEvent, useDeferredValue, useEffect, useState } from "react";
 import { App, Button, Input, Spin, Tag } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
-import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
+import type { PromptDetailDialogProps } from "@/components/prompts/prompt-detail-dialog";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { ALL_PROMPTS_OPTION, syncPromptsOnline, type Prompt } from "@/services/api/prompts";
+
+const PROMPT_RENDER_BATCH_SIZE = 48;
+const PromptDetailDialog = dynamic<PromptDetailDialogProps>(() => import("@/components/prompts/prompt-detail-dialog").then((mod) => mod.PromptDetailDialog), { ssr: false });
 
 export default function PromptsPage() {
     const { message } = App.useApp();
@@ -21,15 +25,24 @@ export default function PromptsPage() {
     const [selectedCategory, setSelectedCategory] = useState(ALL_PROMPTS_OPTION);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [syncingPrompts, setSyncingPrompts] = useState(false);
+    const [visiblePromptCount, setVisiblePromptCount] = useState(PROMPT_RENDER_BATCH_SIZE);
+    const deferredTitleKeyword = useDeferredValue(titleKeyword);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
-    const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
+    const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: deferredTitleKeyword, tags: selectedTags, category: selectedCategory });
+    const searchPending = titleKeyword !== deferredTitleKeyword;
+    const visiblePromptItems = promptItems.slice(0, visiblePromptCount);
+    const hasHiddenLoadedPrompts = visiblePromptCount < promptItems.length;
 
     useEffect(() => {
         if (query.isError) {
             message.error(query.error instanceof Error ? query.error.message : "获取提示词失败");
         }
     }, [message, query.error, query.isError]);
+
+    useEffect(() => {
+        setVisiblePromptCount(PROMPT_RENDER_BATCH_SIZE);
+    }, [deferredTitleKeyword, selectedCategory, selectedTags]);
 
     const toggleTag = (tag: string) => {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
@@ -68,6 +81,12 @@ export default function PromptsPage() {
 
     const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
         const target = event.currentTarget;
+        const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 220;
+        if (!nearBottom) return;
+        if (hasHiddenLoadedPrompts) {
+            setVisiblePromptCount((count) => Math.min(count + PROMPT_RENDER_BATCH_SIZE, promptItems.length));
+            return;
+        }
         if (query.hasNextPage && !query.isFetchingNextPage && target.scrollTop + target.clientHeight >= target.scrollHeight - 160) {
             void query.fetchNextPage();
         }
@@ -101,7 +120,7 @@ export default function PromptsPage() {
                     {!query.isLoading ? (
                         <>
                             <div className="mx-auto mt-8 w-full max-w-2xl">
-                                <Input size="large" className="sacred-prompt-search w-full" prefix={<Search className="size-4" />} value={titleKeyword} placeholder="按标题查询" onChange={(event) => setTitleKeyword(event.target.value)} />
+                                <Input size="large" className="sacred-prompt-search w-full" prefix={<Search className="size-4" />} value={titleKeyword} placeholder="按标题查询" suffix={searchPending ? "搜索中" : null} onChange={(event) => setTitleKeyword(event.target.value)} />
                             </div>
                             <div className="sacred-prompt-filter-surface mx-auto mt-6 grid max-w-6xl gap-3 text-left">
                                 <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
@@ -137,7 +156,7 @@ export default function PromptsPage() {
                 {!query.isLoading ? (
                     <div>
                         <div className="mx-auto grid max-w-7xl gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {promptItems.map((item) => (
+                            {visiblePromptItems.map((item) => (
                                 <PromptCard
                                     key={item.id}
                                     item={item}
@@ -153,7 +172,7 @@ export default function PromptsPage() {
                         </div>
                         {promptItems.length === 0 ? <PromptEmptyState description="没有找到匹配的提示词" /> : null}
                         <div className="sacred-prompt-list-status mx-auto mt-6 max-w-7xl text-center text-xs">
-                            {query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
+                            {query.isFetchingNextPage ? "加载中..." : hasHiddenLoadedPrompts ? `已显示 ${visiblePromptItems.length} / ${promptItems.length} 条，继续向下滚动显示更多` : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
                         </div>
                     </div>
                 ) : null}

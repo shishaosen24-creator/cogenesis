@@ -301,13 +301,11 @@
 
     .stage-nav-reveal {
         opacity: 0;
-        pointer-events: none;
         transform: translateY(-8px);
     }
 
     .sacred-stage-complete .stage-nav-reveal {
         animation: stage-nav-in 0.95s ease 1.55s both;
-        pointer-events: auto;
     }
 
     @keyframes stage-shade-in {
@@ -361,10 +359,31 @@
         }
     }
 
+    .route-transition-feedback-bar {
+        animation: route-transition-feedback 1.35s ease-in-out infinite;
+        transform-origin: left center;
+    }
+
+    @keyframes route-transition-feedback {
+        0% {
+            opacity: 0.34;
+            transform: translateX(-70%) scaleX(0.35);
+        }
+        45% {
+            opacity: 1;
+            transform: translateX(55%) scaleX(0.85);
+        }
+        100% {
+            opacity: 0.42;
+            transform: translateX(170%) scaleX(0.36);
+        }
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .stage-opening-shade,
         .stage-logo-reveal,
         .stage-reveal,
+        .route-transition-feedback-bar,
         .stage-nav-reveal {
             animation-delay: 0.01ms;
             animation-duration: 0.01ms;

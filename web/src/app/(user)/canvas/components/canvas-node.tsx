@@ -16,7 +16,8 @@ const selectionBlue = "#e9c176";
 
 type CanvasNodeProps = {
     data: CanvasNodeData;
-    scale: number;
+    scaleRef: React.RefObject<number>;
+    compactContent: boolean;
     isSelected: boolean;
     isRelated: boolean;
     isFocusRelated: boolean;
@@ -63,6 +64,7 @@ type NodeContentRendererProps = {
     onContentChange: (nodeId: string, content: string) => void;
     onStopEditing: () => void;
     mentionReferences: CanvasResourceReference[];
+    compactContent: boolean;
     onRetry?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
@@ -71,7 +73,8 @@ type NodeContentRendererProps = {
 
 export const CanvasNode = React.memo(function CanvasNode({
     data,
-    scale,
+    scaleRef,
+    compactContent,
     isSelected,
     isRelated,
     isFocusRelated,
@@ -170,6 +173,7 @@ export const CanvasNode = React.memo(function CanvasNode({
         (event: MouseEvent) => {
             if (!resizeRef.current.isResizing) return;
 
+            const scale = Math.max(scaleRef.current || 1, 0.05);
             const dx = (event.clientX - resizeRef.current.startX) / scale;
             const dy = (event.clientY - resizeRef.current.startY) / scale;
             const { minWidth, minHeight } = getNodeMinSize(data.type);
@@ -203,7 +207,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 y: fromTop ? startBottom - height : resizeRef.current.startTop,
             });
         },
-        [data.id, onResize, scale],
+        [data.id, onResize, scaleRef],
     );
 
     const handleResizeUp = useCallback(() => {
@@ -250,17 +254,17 @@ export const CanvasNode = React.memo(function CanvasNode({
                 contain: "layout style",
             }}
             onMouseEnter={() => {
-                setHovered(true);
+                setHovered((current) => (current ? current : true));
                 onHoverStart(data.id);
             }}
             onMouseLeave={() => {
-                setHovered(false);
+                setHovered((current) => (current ? false : current));
                 onHoverEnd(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <div
-                className="relative h-full w-full overflow-visible rounded-xl border"
+                <div
+                    className="relative h-full w-full overflow-visible rounded-xl border"
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
@@ -299,6 +303,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     <NodeContent
                         node={data}
                         theme={theme}
+                        compactContent={compactContent && !isEditingContent}
                         isEditingContent={isEditingContent}
                         textareaRef={textareaRef}
                         isBatchRoot={isBatchRoot}
@@ -317,30 +322,98 @@ export const CanvasNode = React.memo(function CanvasNode({
                     />
                 </div>
 
-                {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
-                {resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
+                {!compactContent && showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
+                {!compactContent && resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
 
-                {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
+                {!compactContent && !hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
-                <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
-                <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                {!compactContent ? (
+                    <>
+                        <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
+                        <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                    </>
+                ) : null}
             </div>
 
-            <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
-            <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
+            {!compactContent ? (
+                <>
+                    <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
+                    <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
+                </>
+            ) : null}
 
             {showPanel && renderPanel ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
         </div>
     );
-});
+}, areCanvasNodePropsEqual);
+
+function areCanvasNodePropsEqual(prev: CanvasNodeProps, next: CanvasNodeProps) {
+    const panelChanged = (prev.showPanel || next.showPanel) && prev.renderPanel !== next.renderPanel;
+    const configContentChanged = (prev.data.type === CanvasNodeType.Config || next.data.type === CanvasNodeType.Config) && prev.renderNodeContent !== next.renderNodeContent;
+
+    return (
+        prev.data === next.data &&
+        prev.scaleRef === next.scaleRef &&
+        prev.compactContent === next.compactContent &&
+        prev.isSelected === next.isSelected &&
+        prev.isRelated === next.isRelated &&
+        prev.isFocusRelated === next.isFocusRelated &&
+        prev.isConnectionTarget === next.isConnectionTarget &&
+        prev.isConnecting === next.isConnecting &&
+        prev.editRequestNonce === next.editRequestNonce &&
+        prev.showPanel === next.showPanel &&
+        prev.showImageInfo === next.showImageInfo &&
+        areResourceReferencesEqual(prev.resourceLabel, next.resourceLabel) &&
+        prev.batchCount === next.batchCount &&
+        prev.batchExpanded === next.batchExpanded &&
+        prev.batchClosing === next.batchClosing &&
+        prev.batchOpening === next.batchOpening &&
+        prev.batchRecovering === next.batchRecovering &&
+        areBatchMotionEqual(prev.batchMotion, next.batchMotion) &&
+        areMentionReferencesEqual(prev.mentionReferences, next.mentionReferences) &&
+        !panelChanged &&
+        !configContentChanged &&
+        prev.onMouseDown === next.onMouseDown &&
+        prev.onHoverStart === next.onHoverStart &&
+        prev.onHoverEnd === next.onHoverEnd &&
+        prev.onConnectStart === next.onConnectStart &&
+        prev.onResize === next.onResize &&
+        prev.onContentChange === next.onContentChange &&
+        prev.onToggleBatch === next.onToggleBatch &&
+        prev.onSetBatchPrimary === next.onSetBatchPrimary &&
+        prev.onRetry === next.onRetry &&
+        prev.onGenerateImage === next.onGenerateImage &&
+        prev.onViewImage === next.onViewImage &&
+        prev.onContextMenu === next.onContextMenu
+    );
+}
+
+function areBatchMotionEqual(first?: { x: number; y: number; index: number }, second?: { x: number; y: number; index: number }) {
+    if (first === second) return true;
+    if (!first || !second) return false;
+    return first.x === second.x && first.y === second.y && first.index === second.index;
+}
+
+function areMentionReferencesEqual(first: CanvasResourceReference[] = [], second: CanvasResourceReference[] = []) {
+    if (first === second) return true;
+    if (first.length !== second.length) return false;
+    return first.every((item, index) => areResourceReferencesEqual(item, second[index]));
+}
+
+function areResourceReferencesEqual(first?: CanvasResourceReference, second?: CanvasResourceReference) {
+    if (first === second) return true;
+    if (!first || !second) return false;
+    return first.id === second.id && first.nodeId === second.nodeId && first.kind === second.kind && first.label === second.label && first.title === second.title && first.previewUrl === second.previewUrl && first.text === second.text && first.active === second.active;
+}
 
 function NodeContent(props: NodeContentRendererProps) {
-    if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
-    if (props.isBatchRoot) return <ImageNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent theme={props.theme} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
+    if (props.compactContent) return <CompactNodeContent node={props.node} theme={props.theme} batchCount={props.batchCount} />;
+    if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
+    if (props.isBatchRoot) return <ImageNodeContent {...props} />;
 
     const Renderer = nodeContentRenderers[props.node.type];
     return Renderer ? <Renderer {...props} /> : <UnknownNodeContent theme={props.theme} />;
@@ -510,7 +583,7 @@ function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
                 <span className="text-sm">空视频节点</span>
             </div>
         );
-    return <video src={node.metadata.content} controls className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-no-zoom />;
+    return <video src={node.metadata.content} controls preload="metadata" className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-no-zoom />;
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
@@ -527,7 +600,7 @@ function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
                 <Music2 className="size-4 shrink-0" />
                 <span className="truncate">{node.title || "音频"}</span>
             </div>
-            <audio src={node.metadata.content} controls className="w-full" data-canvas-no-zoom />
+            <audio src={node.metadata.content} controls preload="metadata" className="w-full" data-canvas-no-zoom />
         </div>
     );
 }
@@ -561,6 +634,9 @@ function ImageContent({
                     src={node.metadata!.content!}
                     alt={node.title}
                     draggable={false}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                     onDragStart={(event) => event.preventDefault()}
                     className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
                 />
@@ -676,6 +752,20 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
             onMouseDown={onMouseDown}
         >
             <div className="size-3 rounded-full border-2 transition-all hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />
+        </div>
+    );
+}
+
+function CompactNodeContent({ node, theme, batchCount }: Pick<NodeContentRendererProps, "node" | "theme" | "batchCount">) {
+    const Icon = node.type === CanvasNodeType.Video ? Video : node.type === CanvasNodeType.Audio ? Music2 : ImageIcon;
+    const label = node.type === CanvasNodeType.Text ? node.metadata?.content || node.title : node.title;
+    return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center" style={{ background: theme.node.fill, color: theme.node.text }}>
+            <div className="grid size-12 place-items-center rounded-2xl border" style={{ borderColor: theme.node.stroke, background: theme.toolbar.activeBg }}>
+                <Icon className="size-5 opacity-60" />
+            </div>
+            <div className="max-w-full truncate text-xs font-medium opacity-75">{label || "节点"}</div>
+            {batchCount > 1 ? <div className="text-[10px] tracking-[0.18em] opacity-45">×{batchCount}</div> : null}
         </div>
     );
 }

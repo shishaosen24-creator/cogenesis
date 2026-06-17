@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, SlidersHorizontal, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
@@ -8,8 +9,8 @@ import { saveAs } from "file-saver";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
-import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
-import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
+import type { PromptSelectDialogProps } from "@/components/prompts/prompt-select-dialog";
+import type { AssetPickerModalProps, InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -20,6 +21,9 @@ import { requestEdit, requestGeneration } from "@/services/api/image";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
+
+const PromptSelectDialog = dynamic<PromptSelectDialogProps>(() => import("@/components/prompts/prompt-select-dialog").then((mod) => mod.PromptSelectDialog), { ssr: false });
+const AssetPickerModal = dynamic<AssetPickerModalProps>(() => import("@/app/(user)/canvas/components/asset-picker-modal").then((mod) => mod.AssetPickerModal), { ssr: false });
 
 type GeneratedImage = {
     id: string;
@@ -64,6 +68,7 @@ type GenerationLogConfig = Pick<AiConfig, "model" | "imageModel" | "quality" | "
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
 
 const LOG_STORE_KEY = "infinite-canvas:image_generation_logs";
+const LOG_RENDER_BATCH_SIZE = 30;
 const RESULT_ACTION_BUTTON_CLASS = "min-w-0 px-1.5 [&_.ant-btn-icon]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate";
 const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
 
@@ -648,8 +653,14 @@ function LogPanel({
     onDeleteSelected: () => void;
     onPreviewLog: (log: GenerationLog) => void;
 }) {
+    const [visibleLogCount, setVisibleLogCount] = useState(LOG_RENDER_BATCH_SIZE);
     const allSelected = Boolean(logs.length) && selectedLogIds.length === logs.length;
     const toggleAll = () => onSelectedLogIdsChange(allSelected ? [] : logs.map((log) => log.id));
+    const visibleLogs = logs.slice(0, visibleLogCount);
+
+    useEffect(() => {
+        setVisibleLogCount(LOG_RENDER_BATCH_SIZE);
+    }, [logs.length]);
 
     return (
         <div className="sacred-workbench-log-panel">
@@ -672,7 +683,7 @@ function LogPanel({
                 </Button>
             </div>
             <div className="space-y-3">
-                {logs.map((log) => (
+                {visibleLogs.map((log) => (
                     <LogCard
                         key={log.id}
                         log={log}
@@ -683,6 +694,11 @@ function LogPanel({
                     />
                 ))}
                 {!logs.length ? <div className="sacred-empty-state flex min-h-48 items-center justify-center text-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无生成记录</div> : null}
+                {visibleLogCount < logs.length ? (
+                    <Button block size="small" onClick={() => setVisibleLogCount((count) => Math.min(count + LOG_RENDER_BATCH_SIZE, logs.length))}>
+                        显示更多记录
+                    </Button>
+                ) : null}
             </div>
         </div>
     );
@@ -705,7 +721,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                         {thumbnails.length ? (
                             <div className="mt-2 flex gap-1 overflow-hidden">
                                 {thumbnails.map((image, index) => (
-                                    <img key={`${log.id}-${index}`} src={image} alt="" className="size-8 shrink-0 rounded-md object-cover" />
+                                    <img key={`${log.id}-${index}`} src={image} alt="" className="size-8 shrink-0 rounded-md object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                                 ))}
                             </div>
                         ) : null}

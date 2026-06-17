@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Download, PencilLine, Search, Trash2, Upload } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Card, Drawer, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 
@@ -52,6 +52,7 @@ export default function AssetsPage() {
     const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
+    const deferredKeyword = useDeferredValue(keyword);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
@@ -59,13 +60,14 @@ export default function AssetsPage() {
     const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video"), [assets]);
 
     const filteredAssets = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
+        const query = deferredKeyword.trim().toLowerCase();
         return validAssets.filter((asset) => {
             if (kindFilter !== "all" && asset.kind !== kindFilter) return false;
             if (!query) return true;
             return assetSearchText(asset).includes(query);
         });
-    }, [validAssets, keyword, kindFilter]);
+    }, [validAssets, deferredKeyword, kindFilter]);
+    const searchPending = keyword !== deferredKeyword;
 
     const visibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -205,6 +207,7 @@ export default function AssetsPage() {
                             prefix={<Search className="size-4 text-stone-400" />}
                             value={keyword}
                             placeholder="搜索标题、内容、标签或来源"
+                            suffix={searchPending ? "搜索中" : null}
                             onChange={(event) => {
                                 setPage(1);
                                 setKeyword(event.target.value);
@@ -371,7 +374,7 @@ export default function AssetsPage() {
                         <Typography.Text strong>预览</Typography.Text>
                         <div className="mt-3 overflow-hidden rounded-lg border border-[color:var(--sacred-outline-variant)] bg-[rgba(30,32,31,0.34)]">
                             {coverUrl || imageDraft?.dataUrl ? (
-                                <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                                <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm text-[color:var(--sacred-on-surface-variant)]">{content || "暂无封面"}</div>
                             )}
@@ -461,7 +464,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     {cover ? (
-                        <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
+                        <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                     ) : (
                         <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}

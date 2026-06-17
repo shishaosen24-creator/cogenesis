@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, FolderPlus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button, Card, Drawer, Image, Input, Pagination, Spin, Tag, Typography } from "antd";
 import axios from "axios";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { uploadImage } from "@/services/image-storage";
+import { SacredLoadingShell } from "@/components/layout/sacred-loading-shell";
 
 const PAGE_SIZE = 12;
 
@@ -22,11 +23,13 @@ export default function AssetLibraryPage() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [page, setPage] = useState(1);
     const [selectedAsset, setSelectedAsset] = useState<AssetLibraryItem | null>(null);
+    const deferredKeyword = useDeferredValue(keyword);
+    const deferredSelectedTags = useDeferredValue(selectedTags);
     const addAsset = useAssetStore((state) => state.addAsset);
 
     const query = useQuery({
-        queryKey: ["asset-library", keyword, selectedType, selectedTags, page],
-        queryFn: () => fetchAssetLibrary({ keyword, type: selectedType, tag: selectedTags, page, pageSize: PAGE_SIZE }),
+        queryKey: ["asset-library", deferredKeyword, selectedType, deferredSelectedTags, page],
+        queryFn: () => fetchAssetLibrary({ keyword: deferredKeyword, type: selectedType, tag: deferredSelectedTags, page, pageSize: PAGE_SIZE }),
         retry: false,
     });
 
@@ -37,6 +40,7 @@ export default function AssetLibraryPage() {
     }, [message, query.error, query.isError]);
 
     const isReady = query.isFetched || query.isError;
+    const searchPending = keyword !== deferredKeyword || selectedTags !== deferredSelectedTags;
     const items = query.data?.items || [];
     const availableTags = query.data?.tags || [];
     const total = query.data?.total || 0;
@@ -79,11 +83,7 @@ export default function AssetLibraryPage() {
     };
 
     if (!isReady) {
-        return (
-            <div className="flex h-full items-center justify-center">
-                <Spin />
-            </div>
-        );
+        return <SacredLoadingShell eyebrow="shared vault" title="素材库加载中" subtitle="正在整理共享素材、标签和预览，马上进入素材选择界面。" />;
     }
 
     return (
@@ -102,6 +102,7 @@ export default function AssetLibraryPage() {
                             prefix={<Search className="size-4 text-stone-400" />}
                             value={keyword}
                             placeholder="按标题查询"
+                            suffix={searchPending || query.isFetching ? "搜索中" : null}
                             onChange={(event) => {
                                 setPage(1);
                                 setKeyword(event.target.value);
@@ -246,7 +247,7 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
                     {cover ? (
-                        <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
+                        <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                     ) : (
                         <div className="flex aspect-[4/3] items-center justify-center bg-[rgba(30,32,31,0.46)] p-5 text-center text-sm leading-6 text-[color:var(--sacred-on-surface-variant)]">{asset.content || "暂无封面"}</div>
                     )}

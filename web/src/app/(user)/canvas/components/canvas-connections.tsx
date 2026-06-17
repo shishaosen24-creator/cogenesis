@@ -1,24 +1,18 @@
+import React from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "../types";
 
-export function ConnectionPath({
+export const ConnectionPath = React.memo(function ConnectionPath({
     connection,
     from,
     to,
     active,
     onSelect,
     onContextMenu,
-}: {
-    connection: CanvasConnection;
-    from: CanvasNodeData;
-    to: CanvasNodeData;
-    active: boolean;
-    onSelect: () => void;
-    onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
-}) {
+}: ConnectionPathProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const startX = from.position.x + from.width;
     const startY = from.position.y + from.height / 2;
@@ -39,12 +33,12 @@ export function ConnectionPath({
                 style={{ cursor: "pointer", pointerEvents: "stroke" }}
                 onClick={(event) => {
                     event.stopPropagation();
-                    onSelect();
+                    onSelect(connection.id);
                 }}
                 onContextMenu={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    onContextMenu?.(event);
+                    onContextMenu?.(event, connection.id);
                 }}
             />
             <path
@@ -57,7 +51,51 @@ export function ConnectionPath({
             />
         </g>
     );
+}, areConnectionPathPropsEqual);
+
+export type ConnectionLayerItem = {
+    id: string;
+    d: string;
+};
+
+type ConnectionLayerProps = {
+    items: ConnectionLayerItem[];
+};
+
+export const ConnectionLayer = React.memo(function ConnectionLayer({ items }: ConnectionLayerProps) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    if (!items.length) return null;
+
+    return (
+        <g aria-hidden>
+            <path
+                d={items.map((item) => item.d).join(" ")}
+                stroke={theme.node.muted}
+                strokeWidth={2}
+                strokeOpacity={0.82}
+                fill="none"
+                style={{ pointerEvents: "none" }}
+            />
+        </g>
+    );
+}, areConnectionLayerPropsEqual);
+
+function areConnectionLayerPropsEqual(prev: ConnectionLayerProps, next: ConnectionLayerProps) {
+    return prev.items === next.items;
 }
+
+function areConnectionPathPropsEqual(prev: ConnectionPathProps, next: ConnectionPathProps) {
+    return prev.connection === next.connection && prev.from === next.from && prev.to === next.to && prev.active === next.active && prev.onSelect === next.onSelect && prev.onContextMenu === next.onContextMenu;
+}
+
+type ConnectionPathProps = {
+    connection: CanvasConnection;
+    from: CanvasNodeData;
+    to: CanvasNodeData;
+    active: boolean;
+    onSelect: (connectionId: string) => void;
+    onContextMenu?: (event: ReactMouseEvent<SVGPathElement>, connectionId: string) => void;
+};
 
 export function ActiveConnectionPath({ node, handle, mouseWorld, target }: { node?: CanvasNodeData; handle: ConnectionHandle; mouseWorld: Position; target?: CanvasNodeData }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];

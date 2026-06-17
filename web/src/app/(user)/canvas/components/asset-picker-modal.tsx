@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Input, Modal, Pagination, Spin, Tabs, Tag } from "antd";
 import { Inbox, Search } from "lucide-react";
@@ -14,14 +14,14 @@ export type AssetPickerTab = "my-assets" | "library";
 
 export type InsertAssetPayload = { kind: "text"; content: string; title: string } | { kind: "image"; dataUrl: string; title: string; storageKey?: string } | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number };
 
-type Props = {
+export type AssetPickerModalProps = {
     open: boolean;
     defaultTab?: AssetPickerTab;
     onInsert: (payload: InsertAssetPayload) => void;
     onClose: () => void;
 };
 
-export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onClose }: AssetPickerModalProps) {
     const [activeTab, setActiveTab] = useState<AssetPickerTab>(defaultTab);
 
     useEffect(() => {
@@ -73,15 +73,17 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
     const [kindFilter, setKindFilter] = useState("");
     const [page, setPage] = useState(1);
     const [inserting, setInserting] = useState<string | null>(null);
+    const deferredKeyword = useDeferredValue(keyword);
 
     const query = useQuery({
-        queryKey: ["asset-picker-library", keyword, kindFilter, page],
-        queryFn: () => fetchAssetLibrary({ keyword, type: kindFilter, page, pageSize: PAGE_SIZE }),
+        queryKey: ["asset-picker-library", deferredKeyword, kindFilter, page],
+        queryFn: () => fetchAssetLibrary({ keyword: deferredKeyword, type: kindFilter, page, pageSize: PAGE_SIZE }),
         retry: false,
     });
 
     const items = query.data?.items || [];
     const total = query.data?.total || 0;
+    const searchPending = keyword !== deferredKeyword || query.isFetching;
 
     const handleInsert = async (asset: AssetLibraryItem) => {
         try {
@@ -109,6 +111,7 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear
+                    suffix={searchPending ? "搜索中" : null}
                     onChange={(e) => {
                         setPage(1);
                         setKeyword(e.target.value);
@@ -169,7 +172,7 @@ function PickerCard({ title, kind, cover, loading, onClick }: { title: string; k
             disabled={loading}
         >
             {cover ? (
-                <img src={cover} alt={title} className="aspect-[4/3] w-full object-cover" />
+                <img src={cover} alt={title} className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
             ) : (
                 <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-[rgba(var(--sacred-panel-rgb),0.32)] p-3 text-center text-xs leading-5 text-[color:var(--sacred-on-surface-variant)]">
                     <span className="sacred-label">{kindLabel}</span>
@@ -219,14 +222,16 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState("all");
     const [page, setPage] = useState(1);
+    const deferredKeyword = useDeferredValue(keyword);
 
     const filtered = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
+        const query = deferredKeyword.trim().toLowerCase();
         return assets
             .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video")
             .filter((a) => kindFilter === "all" || a.kind === kindFilter)
             .filter((a) => !query || [a.title, ...(a.tags || [])].join(" ").toLowerCase().includes(query));
-    }, [assets, keyword, kindFilter]);
+    }, [assets, deferredKeyword, kindFilter]);
+    const searchPending = keyword !== deferredKeyword;
 
     const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
@@ -253,6 +258,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear
+                    suffix={searchPending ? "搜索中" : null}
                     onChange={(e) => {
                         setPage(1);
                         setKeyword(e.target.value);

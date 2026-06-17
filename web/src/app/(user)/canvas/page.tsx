@@ -6,6 +6,7 @@ import { App, Button } from "antd";
 import { Download, FileUp, Plus } from "lucide-react";
 
 import { readZip } from "@/lib/zip";
+import { showRouteTransitionFeedback } from "@/lib/navigation-feedback";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
 import { CanvasDeleteProjectsDialog } from "./components/canvas-delete-projects-dialog";
@@ -27,6 +28,7 @@ export default function CanvasPage() {
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
     const enterProject = (id: string) => {
+        showRouteTransitionFeedback();
         router.push(`/canvas/${id}`);
     };
     const createAndEnter = () => enterProject(createProject(`CoGenesis ${projects.length + 1}`));

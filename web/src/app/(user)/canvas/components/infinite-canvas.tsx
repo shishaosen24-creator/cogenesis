@@ -30,7 +30,9 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     });
     const scaleRef = useRef(viewport.k);
     const frameRef = useRef<number | null>(null);
+    const wheelFrameRef = useRef<number | null>(null);
     const nextViewportRef = useRef<ViewportTransform | null>(null);
+    const nextWheelViewportRef = useRef<ViewportTransform | null>(null);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
 
     useEffect(() => {
@@ -40,6 +42,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     useEffect(
         () => () => {
             if (frameRef.current) cancelAnimationFrame(frameRef.current);
+            if (wheelFrameRef.current) cancelAnimationFrame(wheelFrameRef.current);
         },
         [],
     );
@@ -78,10 +81,16 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const worldX = (mouseX - viewport.x) / viewport.k;
         const worldY = (mouseY - viewport.y) / viewport.k;
 
-        onViewportChange({
+        nextWheelViewportRef.current = {
             x: mouseX - worldX * newScale,
             y: mouseY - worldY * newScale,
             k: newScale,
+        };
+        scaleRef.current = newScale;
+        if (wheelFrameRef.current) return;
+        wheelFrameRef.current = requestAnimationFrame(() => {
+            wheelFrameRef.current = null;
+            if (nextWheelViewportRef.current) onViewportChange(nextWheelViewportRef.current);
         });
     };
 

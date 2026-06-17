@@ -4,7 +4,7 @@ import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../types";
-import { getGenerationResourceEntries } from "../utils/canvas-resource-references";
+import { createCanvasResourceIndex, getGenerationResourceEntries, type CanvasResourceIndex } from "../utils/canvas-resource-references";
 
 export type NodeGenerationContext = {
     prompt: string;
@@ -28,9 +28,9 @@ export type NodeGenerationInput = {
     audio?: ReferenceAudio;
 };
 
-export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string): NodeGenerationContext {
-    const inputs = buildNodeGenerationInputs(nodeId, nodes, connections);
-    const sourceNode = nodes.find((node) => node.id === nodeId);
+export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, index = createCanvasResourceIndex(nodes, connections)): NodeGenerationContext {
+    const inputs = buildNodeGenerationInputs(nodeId, nodes, connections, index);
+    const sourceNode = index.nodeById.get(nodeId);
     if (sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) {
         return buildComposerGenerationContext(inputs, prompt);
     }
@@ -125,8 +125,8 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
     };
 }
 
-export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
-    return getGenerationResourceEntries(nodeId, nodes, connections).flatMap(({ node, sourceNodeId }): NodeGenerationInput[] => {
+export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], index?: CanvasResourceIndex): NodeGenerationInput[] {
+    return getGenerationResourceEntries(nodeId, nodes, connections, index).flatMap(({ node, sourceNodeId }): NodeGenerationInput[] => {
         const image = readReferenceImage(node);
         if (image) return [{ nodeId: node.id, sourceNodeId, type: "image" as const, title: node.title, image }];
         const video = readReferenceVideo(node);

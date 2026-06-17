@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, LoaderCircle, Music2, Plus, SlidersHorizontal, Sparkles, Trash2, Upload, VideoIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Input, Modal, Tag, Typography } from "antd";
@@ -7,9 +8,9 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { saveAs } from "file-saver";
 
-import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
+import type { AssetPickerModalProps, InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { ModelPicker } from "@/components/model-picker";
-import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import type { PromptSelectDialogProps } from "@/components/prompts/prompt-select-dialog";
 import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSizeValue, videoSizeLabel } from "@/components/video-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
@@ -22,6 +23,9 @@ import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
+
+const PromptSelectDialog = dynamic<PromptSelectDialogProps>(() => import("@/components/prompts/prompt-select-dialog").then((mod) => mod.PromptSelectDialog), { ssr: false });
+const AssetPickerModal = dynamic<AssetPickerModalProps>(() => import("@/app/(user)/canvas/components/asset-picker-modal").then((mod) => mod.AssetPickerModal), { ssr: false });
 
 type GeneratedVideo = {
     id: string;
@@ -67,6 +71,7 @@ type GenerationLogConfig = Pick<AiConfig, "model" | "videoModel" | "size" | "vqu
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
 
 const LOG_STORE_KEY = "infinite-canvas:video_generation_logs";
+const LOG_RENDER_BATCH_SIZE = 30;
 const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 export default function VideoPage() {
@@ -401,7 +406,7 @@ export default function VideoPage() {
                                 <div className="sacred-dropzone hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden p-2 pb-3 overscroll-x-contain">
                                     {references.map((item, index) => (
                                         <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-[color:var(--sacred-outline-variant)]">
-                                            <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
+                                            <img src={item.dataUrl} alt={item.name} className="size-full object-cover" loading="lazy" decoding="async" fetchPriority="low" />
                                             <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">{seedanceReferenceLabel("image", index)}</span>
                                             <ReferenceOrderButtons index={index} total={references.length} onMove={(offset) => setReferences((value) => moveListItem(value, index, offset))} />
                                             <button type="button" className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded bg-black/60 text-white group-hover:flex" onClick={() => setReferences((value) => value.filter((ref) => ref.id !== item.id))} aria-label="移除参考图">
@@ -423,7 +428,7 @@ export default function VideoPage() {
                                 <div className="sacred-dropzone hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden p-2 pb-3 overscroll-x-contain">
                                     {videoReferences.map((item, index) => (
                                         <div key={item.id} className="group relative h-20 w-32 shrink-0 overflow-hidden rounded-md border border-[color:var(--sacred-outline-variant)] bg-black">
-                                            <video src={item.url} className="size-full object-cover" muted preload="metadata" />
+                                            <video src={item.url} className="size-full object-cover" muted preload="metadata" playsInline />
                                             <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">{seedanceReferenceLabel("video", index)}</span>
                                             <ReferenceOrderButtons index={index} total={videoReferences.length} onMove={(offset) => setVideoReferences((value) => moveListItem(value, index, offset))} />
                                             <button type="button" className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded bg-black/60 text-white group-hover:flex" onClick={() => setVideoReferences((value) => value.filter((ref) => ref.id !== item.id))} aria-label="移除参考视频">
@@ -598,7 +603,7 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
 function ResultVideoCard({ video, onDownload, onSaveAsset }: { video: GeneratedVideo; onDownload: (video: GeneratedVideo) => void; onSaveAsset: (video: GeneratedVideo) => void }) {
     return (
         <div className="sacred-gallery-card">
-            <video src={video.url} controls className="aspect-video w-full bg-black object-contain" />
+            <video src={video.url} controls className="aspect-video w-full bg-black object-contain" preload="metadata" playsInline />
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-[color:var(--sacred-outline-variant)] px-3 py-2.5">
                 <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-[color:var(--sacred-on-surface-variant)]">
                     <span>
@@ -666,8 +671,14 @@ function LogPanel({
     onDeleteSelected: () => void;
     onPreviewLog: (log: GenerationLog) => void;
 }) {
+    const [visibleLogCount, setVisibleLogCount] = useState(LOG_RENDER_BATCH_SIZE);
     const allSelected = Boolean(logs.length) && selectedLogIds.length === logs.length;
     const toggleAll = () => onSelectedLogIdsChange(allSelected ? [] : logs.map((log) => log.id));
+    const visibleLogs = logs.slice(0, visibleLogCount);
+
+    useEffect(() => {
+        setVisibleLogCount(LOG_RENDER_BATCH_SIZE);
+    }, [logs.length]);
 
     return (
         <div className="sacred-workbench-log-panel">
@@ -690,10 +701,15 @@ function LogPanel({
                 </Button>
             </div>
             <div className="space-y-3">
-                {logs.map((log) => (
+                {visibleLogs.map((log) => (
                     <LogCard key={log.id} log={log} selected={selectedLogIds.includes(log.id)} active={activeLogId === log.id} onSelectedChange={(checked) => onSelectedLogIdsChange(checked ? [...selectedLogIds, log.id] : selectedLogIds.filter((id) => id !== log.id))} onClick={() => onPreviewLog(log)} />
                 ))}
                 {!logs.length ? <div className="sacred-empty-state flex min-h-48 items-center justify-center text-center text-sm text-[color:var(--sacred-on-surface-variant)]">暂无生成记录</div> : null}
+                {visibleLogCount < logs.length ? (
+                    <Button block size="small" onClick={() => setVisibleLogCount((count) => Math.min(count + LOG_RENDER_BATCH_SIZE, logs.length))}>
+                        显示更多记录
+                    </Button>
+                ) : null}
             </div>
         </div>
     );

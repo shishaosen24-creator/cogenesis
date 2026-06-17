@@ -3,7 +3,10 @@
 import { Check, Download, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "antd";
+import { useRef } from "react";
 
+import { showRouteTransitionFeedback } from "@/lib/navigation-feedback";
+import { scheduleRoutePrefetch } from "@/lib/route-prefetch";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "../utils/canvas-export";
@@ -21,9 +24,18 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
-    const open = () => router.push(`/canvas/${project.id}`);
+    const cancelWarmRouteRef = useRef<(() => void) | null>(null);
+    const open = () => {
+        showRouteTransitionFeedback();
+        router.push(`/canvas/${project.id}`);
+    };
     const prefetchProject = () => {
-        void router.prefetch(`/canvas/${project.id}`);
+        cancelWarmRouteRef.current?.();
+        cancelWarmRouteRef.current = scheduleRoutePrefetch(router, `/canvas/${project.id}`);
+    };
+    const cancelWarmRoute = () => {
+        cancelWarmRouteRef.current?.();
+        cancelWarmRouteRef.current = null;
     };
     const saveTitle = () => {
         renameProject(project.id, editingTitle);
@@ -31,7 +43,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="sacred-gallery-card group flex min-h-44 cursor-pointer flex-col justify-between p-5 text-[color:var(--sacred-on-surface)]" onClick={() => !editing && open()} onMouseEnter={prefetchProject}>
+        <article className="sacred-gallery-card group flex min-h-44 cursor-pointer flex-col justify-between p-5 text-[color:var(--sacred-on-surface)]" onClick={() => !editing && open()} onMouseEnter={prefetchProject} onMouseLeave={cancelWarmRoute}>
             <div className="flex items-start gap-3">
                 <input
                     type="checkbox"
