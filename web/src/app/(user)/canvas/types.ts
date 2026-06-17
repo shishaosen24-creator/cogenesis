@@ -77,6 +77,7 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    directorReferenceRole?: import("./director/types").DirectorReferenceRole;
     director?: {
         workflowId: string;
         stepId?: string;
@@ -85,6 +86,8 @@ export type CanvasNodeMetadata = {
         dependencyStepIds?: string[];
         plannedOrder?: number;
         runState?: "planned" | "ready" | "running" | "done" | "error";
+        revisionOf?: string;
+        revisionIndex?: number;
     };
 };
 

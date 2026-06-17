@@ -22,13 +22,16 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
     const open = () => router.push(`/canvas/${project.id}`);
+    const prefetchProject = () => {
+        void router.prefetch(`/canvas/${project.id}`);
+    };
     const saveTitle = () => {
         renameProject(project.id, editingTitle);
         stopEditing();
     };
 
     return (
-        <article className="sacred-gallery-card group flex min-h-44 cursor-pointer flex-col justify-between p-5 text-[color:var(--sacred-on-surface)]" onClick={() => !editing && open()}>
+        <article className="sacred-gallery-card group flex min-h-44 cursor-pointer flex-col justify-between p-5 text-[color:var(--sacred-on-surface)]" onClick={() => !editing && open()} onMouseEnter={prefetchProject}>
             <div className="flex items-start gap-3">
                 <input
                     type="checkbox"

@@ -1,22 +1,30 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Menu } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
-import { AppConfigModal } from "@/components/layout/app-config-modal";
-import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
+const AppConfigModal = dynamic(() => import("@/components/layout/app-config-modal").then((mod) => mod.AppConfigModal), { ssr: false });
+const MobileNavDrawer = dynamic(() => import("@/components/layout/mobile-nav-drawer").then((mod) => mod.MobileNavDrawer), { ssr: false });
+
 export function AppTopNav() {
     const pathname = usePathname();
+    const router = useRouter();
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const warmRoute = (href: string) => {
+        const link = document.createElement("a");
+        link.href = href;
+        void router.prefetch(link.pathname);
+    };
 
     return (
         <>
@@ -29,7 +37,7 @@ export function AppTopNav() {
                 >
                     <div className="mx-auto flex h-full max-w-[1440px] items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
-                            <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[color:var(--sacred-on-surface)] transition hover:text-[color:var(--sacred-tertiary)]">
+                            <Link href="/" prefetch={false} onMouseEnter={() => warmRoute("/")} onFocus={() => warmRoute("/")} className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[color:var(--sacred-on-surface)] transition hover:text-[color:var(--sacred-tertiary)]">
                                 <img src="/brand/site-logo-transparent.png" alt="CoGenesis" className="size-9 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(197,160,89,0.35)] transition group-hover:drop-shadow-[0_0_16px_rgba(197,160,89,0.55)]" />
                                 <span className="sacred-title text-lg font-semibold">CoGenesis</span>
                             </Link>
@@ -52,6 +60,9 @@ export function AppTopNav() {
                                         <Link
                                             key={tool.slug}
                                             href={`/${tool.slug}`}
+                                            prefetch={false}
+                                            onMouseEnter={() => warmRoute(`/${tool.slug}`)}
+                                            onFocus={() => warmRoute(`/${tool.slug}`)}
                                             className={cn(
                                                 "relative flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm leading-6 transition after:absolute after:inset-x-3 after:bottom-1 after:h-px after:origin-center after:transition",
                                                 active

@@ -2,8 +2,13 @@ import type { CanvasGenerationMode } from "../types";
 import type { CanvasNodeType } from "../types";
 
 export type DirectorStepMode = CanvasGenerationMode | "note";
-export type DirectorReferenceRole = "product" | "logo" | "character" | "scene" | "style" | "reference-video" | "reference-audio" | "other";
+export type DirectorReferenceRole = "product" | "logo" | "character" | "scene" | "style" | "reference-video" | "reference-audio" | "user-reference" | "other";
 export type DirectorReferenceMediaType = "image" | "video" | "audio" | "text";
+export type DirectorWorkflowRevisionSource = {
+    workflowId: string;
+    workflowTitle?: string;
+    summary?: string;
+};
 
 export type DirectorWorkflowReference = {
     id: string;
@@ -44,6 +49,8 @@ export type DirectorWorkflow = {
     title: string;
     summary: string;
     sourcePrompt: string;
+    revisionOf?: DirectorWorkflowRevisionSource;
+    revisionIndex?: number;
     references: DirectorWorkflowReference[];
     referencePack?: DirectorReferencePackItem[];
     steps: DirectorWorkflowStep[];

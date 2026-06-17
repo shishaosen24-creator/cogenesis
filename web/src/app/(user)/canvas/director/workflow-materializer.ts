@@ -62,6 +62,7 @@ function createDirectorInputNode(workflow: DirectorWorkflow, center: Position): 
     const spec = getNodeSpec(CanvasNodeType.Text);
     const references = workflow.references.length ? `\n\n参考素材：\n${workflow.references.map((reference, index) => `${index + 1}. ${reference.title}`).join("\n")}` : "";
     const pack = workflow.referencePack?.length ? `\n\n客户素材包：\n${workflow.referencePack.map((item, index) => `${index + 1}. ${item.title} / ${item.role} / ${item.mediaType}`).join("\n")}` : "";
+    const revision = workflow.revisionOf ? `\n\n修订自：${workflow.revisionOf.workflowTitle || workflow.revisionOf.workflowId}${workflow.revisionIndex ? ` · 第 ${workflow.revisionIndex} 版` : ""}` : "";
     return {
         id: `director-input-${nanoid(8)}`,
         type: CanvasNodeType.Text,
@@ -70,7 +71,7 @@ function createDirectorInputNode(workflow: DirectorWorkflow, center: Position): 
         width: spec.width,
         height: spec.height,
         metadata: {
-            content: `# ${workflow.title}\n\n${workflow.sourcePrompt}${references}${pack}`,
+            content: `# ${workflow.title}${revision}\n\n${workflow.sourcePrompt}${references}${pack}`,
             prompt: workflow.sourcePrompt,
             status: "success",
             fontSize: 14,
@@ -78,6 +79,8 @@ function createDirectorInputNode(workflow: DirectorWorkflow, center: Position): 
                 workflowId: workflow.id,
                 role: "input",
                 runState: "done",
+                revisionOf: workflow.revisionOf?.workflowId,
+                revisionIndex: workflow.revisionIndex,
             },
         },
     };
@@ -111,6 +114,8 @@ function createNoteMetadata(workflow: DirectorWorkflow, step: DirectorWorkflowSt
             dependencyStepIds: step.dependsOn || [],
             plannedOrder: order,
             runState: "done",
+            revisionOf: workflow.revisionOf?.workflowId,
+            revisionIndex: workflow.revisionIndex,
         },
     };
 }
@@ -144,6 +149,8 @@ function createConfigMetadata(workflow: DirectorWorkflow, step: DirectorWorkflow
             dependencyStepIds: step.dependsOn || [],
             plannedOrder: order,
             runState: "ready",
+            revisionOf: workflow.revisionOf?.workflowId,
+            revisionIndex: workflow.revisionIndex,
         },
     };
 }

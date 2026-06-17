@@ -3,31 +3,36 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const PREWARM_ROUTES = ["/canvas", "/canvas/__route-prewarm__", "/image", "/video", "/prompts", "/assets", "/asset-library", "/login"];
+const PREWARM_ROUTES = ["/canvas", "/image", "/video", "/prompts", "/assets"];
 
 export function RoutePrewarmer() {
     const router = useRouter();
 
     useEffect(() => {
         let cancelled = false;
-        PREWARM_ROUTES.forEach((route) => router.prefetch(route));
-        const warmTimer = window.setTimeout(() => {
-            if (process.env.NODE_ENV !== "development") return;
-            void (async () => {
-                for (const route of PREWARM_ROUTES) {
-                    if (cancelled) return;
-                    try {
-                        await fetch(route, { cache: "no-store", credentials: "same-origin" });
-                    } catch {
-                        // Dev-only route warming should never block the UI.
-                    }
+        const warm = () => {
+            if (cancelled) return;
+            for (const route of PREWARM_ROUTES) {
+                if (cancelled) return;
+                try {
+                    router.prefetch(route);
+                } catch {
+                    // Route warm-up should never block navigation.
                 }
-            })();
-        }, 250);
+            }
+        };
+        if (process.env.NODE_ENV === "development") {
+            warm();
+            return () => {
+                cancelled = true;
+            };
+        }
+        const idle = window.requestIdleCallback ? window.requestIdleCallback(warm, { timeout: 2500 }) : window.setTimeout(warm, 2500);
 
         return () => {
             cancelled = true;
-            window.clearTimeout(warmTimer);
+            if (typeof idle === "number") window.clearTimeout(idle);
+            else window.cancelIdleCallback?.(idle);
         };
     }, [router]);
 

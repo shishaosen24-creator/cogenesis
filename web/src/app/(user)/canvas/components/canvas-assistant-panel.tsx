@@ -231,16 +231,17 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 const previousWorkflow = findLastDirectorWorkflow(history);
                 let rawWorkflow = "";
                 let plannerError = "";
+                const baseWorkflowId = previousWorkflow?.id;
                 if (canUseAi) {
                     try {
-                        rawWorkflow = await requestImageQuestion(requestConfig, await buildDirectorPlannerMessages({ prompt: text, references: directorReferences, referencePack: pack, previousWorkflow }), () => {
+                        rawWorkflow = await requestImageQuestion(requestConfig, await buildDirectorPlannerMessages({ prompt: text, references: directorReferences, referencePack: pack, previousWorkflow, baseWorkflowId }), () => {
                             updateMessage(session.id, assistantId, { text: "正在拆解创意、规划节点与依赖关系...", isLoading: true });
                         });
                     } catch (error) {
                         plannerError = error instanceof Error ? error.message : "文本模型规划失败";
                     }
                 }
-                const workflow = rawWorkflow ? parseDirectorWorkflow(rawWorkflow, { prompt: text, references: directorReferences, referencePack: pack }) : createFallbackDirectorWorkflow({ prompt: text, references: directorReferences, referencePack: pack });
+                const workflow = rawWorkflow ? parseDirectorWorkflow(rawWorkflow, { prompt: text, references: directorReferences, referencePack: pack, previousWorkflow }) : createFallbackDirectorWorkflow({ prompt: text, references: directorReferences, referencePack: pack, previousWorkflow });
                 const materialization = await onApplyDirectorWorkflow(workflow);
                 const workflowText = formatDirectorWorkflowText(workflow, materialization);
                 updateMessage(session.id, assistantId, {
@@ -422,7 +423,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         </Tooltip>
                     </div>
                 </div>
-                <DirectorSharedContextSummary theme={theme} summary={sharedSummary} activeMode={panelMode} workflowQueueSummary={workflowQueueSummary} />
+                <DirectorSharedContextSummary theme={theme} summary={sharedSummary} activeMode={panelMode} workflowQueueSummary={workflowQueueSummary} hasUserReference={activeReferencePack.some((item) => item.role === "user-reference")} />
 
                 {panelMode === "local-agent" ? (
                     <CanvasLocalAgentPanel
@@ -567,7 +568,7 @@ function AssistantComposer({
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [attachRole, setAttachRole] = useState<DirectorReferenceRole>("product");
+    const [attachRole, setAttachRole] = useState<DirectorReferenceRole>("user-reference");
     const [attaching, setAttaching] = useState(false);
     const activeModel = mode === "image" ? config.imageModel || config.model : config.textModel || config.model;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: activeModel, count: mode === "image" ? config.count : 1 });
@@ -637,7 +638,7 @@ function AssistantComposer({
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
                         <CanvasPromptLibrary onSelect={onPromptChange} />
-                        <Tooltip title="添加客户素材">
+                        <Tooltip title="添加用户素材参考">
                             <Button type="text" loading={attaching} className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Paperclip className="size-4" />} onClick={() => fileInputRef.current?.click()} />
                         </Tooltip>
                         <Select
@@ -731,11 +732,13 @@ function DirectorSharedContextSummary({
     summary,
     activeMode,
     workflowQueueSummary,
+    hasUserReference,
 }: {
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     summary: { nodes: number; references: number; assets: number; workflows: number; queue: number; ready: number; running: number };
     activeMode: CanvasControlPanelMode;
     workflowQueueSummary: ReturnType<typeof buildDirectorWorkflowQueueSummary>;
+    hasUserReference: boolean;
 }) {
     const items = [
         { label: "节点", value: summary.nodes },
@@ -756,6 +759,7 @@ function DirectorSharedContextSummary({
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
                 <span>{activeMode === "director" ? "当前：导演规划链路" : "当前：本地 Agent 执行链路"}</span>
+                <span>{hasUserReference ? "用户素材参考已接入" : "用户素材参考为空，已自动绕过"}</span>
                 <span>导演台负责故事板、一致性和任务依赖；本地 Agent 读取同一份上下文执行画布操作。</span>
             </div>
             {workflowQueueSummary.length ? (
@@ -1273,11 +1277,11 @@ async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<Ch
     );
 }
 
-async function buildDirectorPlannerMessages(input: { prompt: string; references: DirectorWorkflowReference[]; referencePack: DirectorReferencePackItem[]; previousWorkflow?: DirectorWorkflow }): Promise<ChatCompletionMessage[]> {
+async function buildDirectorPlannerMessages(input: { prompt: string; references: DirectorWorkflowReference[]; referencePack: DirectorReferencePackItem[]; previousWorkflow?: DirectorWorkflow; baseWorkflowId?: string }): Promise<ChatCompletionMessage[]> {
     const promptText = buildDirectorPlannerPrompt(input);
     const imageItems = await Promise.all(
         input.referencePack
-            .filter((item) => item.mediaType === "image" && item.dataUrl)
+            .filter((item) => item.role === "user-reference" && item.mediaType === "image" && item.dataUrl)
             .map(async (item) => ({
                 type: "image_url" as const,
                 image_url: { url: await imageToDataUrl({ dataUrl: item.dataUrl, storageKey: item.storageKey }) },
@@ -1289,6 +1293,9 @@ async function buildDirectorPlannerMessages(input: { prompt: string; references:
             content: imageItems.length ? [{ type: "text" as const, text: promptText }, ...imageItems] : promptText,
         },
     ];
+}
+function hasUserReferencePack(referencePack: DirectorReferencePackItem[]) {
+    return referencePack.some((item) => item.role === "user-reference");
 }
 
 function createSession(): CanvasAssistantSession {

@@ -8,6 +8,7 @@ type PlannerInput = {
     references: DirectorWorkflowReference[];
     referencePack?: DirectorReferencePackItem[];
     previousWorkflow?: DirectorWorkflow;
+    baseWorkflowId?: string;
 };
 
 const MAX_STEPS = 12;
@@ -21,14 +22,16 @@ export function buildDirectorPlannerPrompt(input: PlannerInput) {
               {
                   title: input.previousWorkflow.title,
                   summary: input.previousWorkflow.summary,
+                  revisionIndex: input.previousWorkflow.revisionIndex || 0,
                   steps: input.previousWorkflow.steps,
               },
               null,
               2,
           )
         : "无";
+    const revisionText = input.baseWorkflowId ? `\n当前是在修订工作流，baseWorkflowId=${input.baseWorkflowId}。请输出完整修订版，不要只输出差异。` : "";
 
-    return `你是 CoGenesis Director，一个 AI 创作导演。请把用户给出的主题、图片参考、剧本、产品或广告需求，拆成可以在无限画布上执行的大型创作工作流。
+    return `你是 CoGenesis Director，一个 AI 创作导演。请把用户给出的主题、图片参考、剧本、产品或广告需求，拆成可以在无限画布上执行的大型创作工作流。${revisionText}
 
 只输出 JSON，不要输出 Markdown，也不要解释。
 
@@ -93,6 +96,8 @@ export function parseDirectorWorkflow(raw: string, input: PlannerInput): Directo
         title: cleanText(source.title, "导演工作流").slice(0, 24),
         summary: cleanText(source.summary, "已根据你的创意搭建可执行的大型画布工作流。"),
         sourcePrompt: input.prompt,
+        revisionOf: input.previousWorkflow ? { workflowId: input.previousWorkflow.id, workflowTitle: input.previousWorkflow.title, summary: input.previousWorkflow.summary } : undefined,
+        revisionIndex: input.previousWorkflow ? (input.previousWorkflow.revisionIndex || 0) + 1 : 0,
         references: input.references.length ? input.references : directorReferencePackToLegacyReferences(input.referencePack || []),
         referencePack: input.referencePack,
         steps,
@@ -211,6 +216,8 @@ export function createFallbackDirectorWorkflow(input: PlannerInput): DirectorWor
         title: "大型导演工作流",
         summary: "已用本地导演策略把主题拆成前序资产、基于真实节点结果的故事板、多段视频、剪辑缺片方案和审校流程。",
         sourcePrompt: input.prompt,
+        revisionOf: input.previousWorkflow ? { workflowId: input.previousWorkflow.id, workflowTitle: input.previousWorkflow.title, summary: input.previousWorkflow.summary } : undefined,
+        revisionIndex: input.previousWorkflow ? (input.previousWorkflow.revisionIndex || 0) + 1 : 0,
         references: input.references.length ? input.references : directorReferencePackToLegacyReferences(input.referencePack || []),
         referencePack: input.referencePack,
         steps,
@@ -219,7 +226,8 @@ export function createFallbackDirectorWorkflow(input: PlannerInput): DirectorWor
 }
 
 export function formatDirectorWorkflowText(workflow: DirectorWorkflow, materialization?: DirectorWorkflowMaterialization, runReport?: DirectorWorkflowRunReport) {
-    const lines = [`已生成导演工作流：${workflow.title}`, "", workflow.summary, "", ...workflow.steps.map((step, index) => `${index + 1}. ${step.title} · ${modeLabel(step.mode)}\n${step.description || step.prompt.slice(0, 80)}`)];
+    const revisionText = workflow.revisionOf ? `\n修订自：${workflow.revisionOf.workflowTitle || workflow.revisionOf.workflowId}${workflow.revisionIndex ? ` · 第 ${workflow.revisionIndex} 版` : ""}` : "";
+    const lines = [`已生成导演工作流：${workflow.title}${revisionText}`, "", workflow.summary, "", ...workflow.steps.map((step, index) => `${index + 1}. ${step.title} · ${modeLabel(step.mode)}\n${step.description || step.prompt.slice(0, 80)}`)];
     if (materialization) {
         lines.push("", `已搭建到画布：${materialization.nodeIds.length} 个节点，${materialization.connectionIds.length} 条连线。`);
     }

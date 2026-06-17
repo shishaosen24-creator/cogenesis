@@ -124,7 +124,7 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
         const kind = resourceKind(node);
         if (!kind) return [];
         const index = counts[kind]++;
-        const label = labelForKind(kind, index);
+        const label = labelForKind(kind, index, node);
         return [
             {
                 id: node.id,
@@ -140,7 +140,8 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
     });
 }
 
-function labelForKind(kind: CanvasResourceKind, index: number) {
+function labelForKind(kind: CanvasResourceKind, index: number, node: CanvasNodeData) {
+    if (node.metadata?.directorReferenceRole === "user-reference") return "用户素材参考";
     if (kind === "image") return imageReferenceLabel(index);
     if (kind === "video") return seedanceReferenceLabel("video", index);
     if (kind === "audio") return seedanceReferenceLabel("audio", index);

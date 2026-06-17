@@ -9,6 +9,7 @@ export const DIRECTOR_REFERENCE_ROLE_OPTIONS: Array<{ value: DirectorReferenceRo
     { value: "style", label: "风格参考", mediaTypes: ["image", "video", "audio"] },
     { value: "reference-video", label: "参考视频", mediaTypes: ["video"] },
     { value: "reference-audio", label: "参考音频", mediaTypes: ["audio"] },
+    { value: "user-reference", label: "用户素材参考", mediaTypes: ["image", "video", "audio", "text"] },
     { value: "other", label: "其他参考" },
 ];
 
@@ -25,6 +26,41 @@ export function defaultDirectorReferenceRole(mediaType: DirectorReferencePackIte
     if (mediaType === "video") return "reference-video";
     if (mediaType === "audio") return "reference-audio";
     return "product";
+}
+
+export function createUserReferencePackItem(input: {
+    id: string;
+    nodeId: string;
+    title: string;
+    type: DirectorReferencePackItem["type"];
+    mediaType: DirectorReferencePackItem["mediaType"];
+    text?: string;
+    dataUrl?: string;
+    url?: string;
+    storageKey?: string;
+    mimeType?: string;
+    bytes?: number;
+    width?: number;
+    height?: number;
+    durationMs?: number;
+}): DirectorReferencePackItem {
+    return {
+        id: input.id,
+        nodeId: input.nodeId,
+        role: "user-reference",
+        mediaType: input.mediaType,
+        title: input.title,
+        type: input.type,
+        text: input.text,
+        dataUrl: input.dataUrl,
+        url: input.url,
+        storageKey: input.storageKey,
+        mimeType: input.mimeType,
+        bytes: input.bytes,
+        width: input.width,
+        height: input.height,
+        durationMs: input.durationMs,
+    };
 }
 
 export function directorReferencePackToLegacyReferences(pack: DirectorReferencePackItem[]): DirectorWorkflowReference[] {
@@ -55,6 +91,7 @@ export function buildDirectorReferencePackPrompt(pack: DirectorReferencePackItem
         ...lines,
         "",
         "素材使用规则：",
+        "0. 用户素材参考优先于其他参考；如果没有用户素材参考，后续生成必须自动绕过该接点，不得阻断文生图。",
         "1. 产品主图用于锁定产品比例、瓶身/包装结构、材质、Logo 位置和关键卖点，不得在后续图像或视频中漂移。",
         "2. Logo 必须保持形状、位置、颜色和可读性，不能被重绘成其他标识。",
         "3. 主角素材用于锁定人物身份、脸部、发型、服装和气质，不能换人。",
@@ -89,16 +126,18 @@ export function createDirectorReferencePackItemFromNode(node: {
         naturalHeight?: number;
         durationMs?: number;
         prompt?: string;
+        directorReferenceRole?: DirectorReferenceRole;
     };
 }): DirectorReferencePackItem | null {
     const mediaType = mediaTypeFromNodeType(node.type);
     if (!mediaType) return null;
     const content = node.metadata?.content;
     if (mediaType !== "text" && !content) return null;
+    const role = node.metadata?.directorReferenceRole || defaultDirectorReferenceRole(mediaType);
     return {
         id: node.id,
         nodeId: node.id,
-        role: defaultDirectorReferenceRole(mediaType),
+        role,
         mediaType,
         title: node.title || mediaTypeLabel(mediaType),
         type: node.type,

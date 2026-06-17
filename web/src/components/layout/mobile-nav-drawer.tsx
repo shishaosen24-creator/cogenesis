@@ -2,6 +2,7 @@
 
 import { Drawer } from "antd";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,10 @@ type MobileNavDrawerProps = {
 };
 
 export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDrawerProps) {
+    const router = useRouter();
+    const warmRoute = (href: string) => {
+        void router.prefetch(href);
+    };
     return (
         <Drawer title="导航" placement="left" size={300} open={open} onClose={onClose} className="md:hidden">
             <div className="space-y-3">
@@ -27,7 +32,10 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                         <Link
                             key={tool.slug}
                             href={`/${tool.slug}`}
+                            prefetch={false}
                             onClick={onClose}
+                            onMouseEnter={() => warmRoute(`/${tool.slug}`)}
+                            onFocus={() => warmRoute(`/${tool.slug}`)}
                             className={cn(
                                 "flex items-center gap-3 rounded-md border px-3 py-3 text-base transition",
                                 active
